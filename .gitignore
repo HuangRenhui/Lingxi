@@ -33,6 +33,9 @@ yarn-error.log*
 # 本地运行配置（含数据库、Redis 等真实凭证）
 backend/config/
 
+# 本地临时目录：联调脚本、运行截图与归档文档属于个人环境产物，不入库
+docs/_src/
+
 # OS
 .DS_Store
 Thumbs.db
