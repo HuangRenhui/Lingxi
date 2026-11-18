@@ -1,0 +1,39 @@
+# Java
+backend/target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+backend/logs/
+*.log
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+pnpm-debug.log*
+yarn-error.log*
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.settings/
+.project
+.classpath
+
+# Env / Secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# 本地运行配置（含数据库、Redis 等真实凭证）
+backend/config/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
