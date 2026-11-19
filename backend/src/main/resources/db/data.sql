@@ -1,0 +1,15 @@
+-- 灵犀初始化数据（幂等，可重复执行）
+-- 默认账号：admin / Admin@123（仅用于本地与演示环境，上线前必须修改）
+
+INSERT IGNORE INTO sys_user (id, username, password, nickname, role, status, deleted)
+VALUES (1, 'admin', '$2b$10$TyGTQFtbQpWK9kseDlLHC.YyE/kMhpNgdvTJ7b5YsqRL.5Rnw09NC', '演示管理员', 'ADMIN', 1, 0);
+
+INSERT IGNORE INTO ai_task (id, user_id, name, prompt_template, model, run_location, timezone,
+                            schedule_type, execute_time, week_days, jitter_seconds, max_rounds,
+                            status, run_count, deleted)
+VALUES (1, 1, '每日 AI 资讯汇总',
+        '总结 {{date}} 的 AI 行业资讯，这是第 {{run_count}} 次运行。上次结果摘要：{{last_output}}',
+        'gpt-4o', 'CLOUD', 'Asia/Shanghai', 'DAILY', '09:00', NULL, 30, 50, 'ENABLED', 0, 0),
+       (2, 1, '每周竞品观察',
+        '整理本周竞品动态并输出要点，重点关注产品更新与定价变化。',
+        'claude-3-5-sonnet', 'LOCAL', 'Asia/Shanghai', 'WEEKLY', '18:00', '5', 0, 30, 'DISABLED', 0, 0);
