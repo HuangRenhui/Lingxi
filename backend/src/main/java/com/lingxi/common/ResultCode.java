@@ -3,7 +3,9 @@ package com.lingxi.common;
 /**
  * 业务状态码。
  *
- * <p>约定：HTTP 状态统一返回 200，业务结果由 code 表达，前端按 code 分支处理。</p>
+ * <p>约定：业务结果以 code 为准，前端按 code 分支处理；HTTP 状态在认证（401）、
+ * 授权（403）、路由（404/405）与系统错误（5xx）上与 code 保持一致，
+ * 以便网关与监控无需解析响应体即可识别故障类型。</p>
  */
 public enum ResultCode {
 

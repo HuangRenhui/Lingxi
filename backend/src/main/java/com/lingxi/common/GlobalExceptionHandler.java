@@ -70,6 +70,11 @@ public class GlobalExceptionHandler {
         return Result.error(ResultCode.METHOD_NOT_ALLOWED);
     }
 
+    /**
+     * 注意：仅在关闭静态资源映射（spring.web.resources.add-mappings=false）时才会命中。
+     * 默认配置下 {@code /**} 由 ResourceHttpRequestHandler 接管，404 通过 sendError 转发到
+     * {@code /error}，由 {@link ApiErrorController} 输出统一结构。
+     */
     @ExceptionHandler(NoHandlerFoundException.class)
     public Result<Void> handleNoHandlerFound(NoHandlerFoundException ex) {
         log.warn("No handler found: {} {}", ex.getHttpMethod(), ex.getRequestURL());
@@ -78,15 +83,16 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DuplicateKeyException.class)
     public Result<Void> handleDuplicateKey(DuplicateKeyException ex) {
-        // 唯一索引冲突（如逻辑删除后重建同名记录）应返回明确的业务错误
-        log.warn("Duplicate key: {}", ex.getMostSpecificCause().getMessage());
+        // 唯一索引冲突（如逻辑删除后重建同名记录）应返回明确的业务错误；
+        // 带上异常对象以便定位具体索引，否则只有一句 SQL 报错无法排查
+        log.warn("Duplicate key: {}", ex.getMostSpecificCause().getMessage(), ex);
         return Result.error(ResultCode.DATA_CONFLICT);
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public Result<Void> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
         // 字段超长、非空约束等数据层校验失败归为参数错误
-        log.warn("Data integrity violation: {}", ex.getMostSpecificCause().getMessage());
+        log.warn("Data integrity violation: {}", ex.getMostSpecificCause().getMessage(), ex);
         return Result.error(ResultCode.PARAM_ERROR.getCode(), "提交的数据不符合字段约束");
     }
 

@@ -10,6 +10,15 @@ spring:
       port: ${SPRING_DATA_REDIS_PORT:6379}
       password: ${SPRING_DATA_REDIS_PASSWORD:}
       database: 0
+      # Lettuce 默认读超时 60s：Redis 挂起时每个请求会阻塞一分钟，必须显式收紧
+      timeout: ${SPRING_DATA_REDIS_TIMEOUT:3000ms}
+      connect-timeout: ${SPRING_DATA_REDIS_CONNECT_TIMEOUT:3000ms}
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 0
+          max-wait: 2000ms
 
 springdoc:
   api-docs:

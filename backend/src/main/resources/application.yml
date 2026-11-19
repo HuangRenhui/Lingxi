@@ -44,7 +44,10 @@ lingxi:
     # 生产环境必须通过环境变量 JWT_SECRET 注入密钥；未配置时应用启动失败。
     # 开发环境的默认密钥仅在 application-dev.yml 中提供。
     secret: ${JWT_SECRET:}
+    # 单次令牌有效期（滑动过期）
     expire-minutes: 720
+    # 会话绝对上限（小时）：即使持续刷新，超过该时长也必须重新登录；<=0 表示不限制
+    max-session-hours: 168
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
 

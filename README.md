@@ -149,7 +149,7 @@ npm run dev
 
 访问 <http://localhost:5173>，开发环境默认启用前端 Mock（自动跳过登录与后端校验），直接进入首页；需要连接真实后端时设置 `VITE_MOCK=false` 后重启。
 
-管理后台入口为 <http://localhost:5173/lingxi-console-7c3f/login>（演示管理员 `admin / Admin@123`），可通过 `VITE_ADMIN_PATH` 修改隐藏路径；管理后台为纯前端演示会话，上线前需接入后端鉴权。
+管理后台入口为 <http://localhost:5173/lingxi-console-7c3f/login>，可通过 `VITE_ADMIN_PATH` 修改隐藏路径。演示管理员口令为默认种子数据 `db/data.sql` 中记录的演示账号（仅用于本地演示，**生产环境必须在首次部署后立即重置**，否则等同于公开凭据）；管理后台为纯前端演示会话，上线前需接入后端鉴权。
 
 更完整的配置与排错说明见 [开发指南](./docs/开发指南.md)。
 

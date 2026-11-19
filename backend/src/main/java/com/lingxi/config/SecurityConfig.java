@@ -36,6 +36,8 @@ public class SecurityConfig {
             // 注销与刷新由 Controller 自行解析 Token：即使 Token 已过期也应返回统一业务错误而不是被过滤器拦截。
             "/auth/logout",
             "/auth/refresh",
+            // 容器错误转发目标：未放行时匿名访问不存在路径会被判未认证，404 变成 401
+            "/error",
             "/doc.html",
             "/webjars/**",
             "/favicon.ico",
