@@ -1,0 +1,210 @@
+/* ---------- 管理后台通用页面样式 ---------- */
+
+.admin-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+  max-width: 1360px;
+  margin: 0 auto;
+  padding: 24px 32px 48px;
+}
+
+.admin-page .stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-page .filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.admin-page .filter-search {
+  width: 240px;
+}
+
+.admin-page .filter-item {
+  width: 156px;
+}
+
+.admin-page .filter-action {
+  margin-left: auto;
+}
+
+.admin-page .table-panel {
+  padding: 4px 18px 10px;
+}
+
+.admin-page .table-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 0 8px;
+}
+
+.admin-page .table-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.admin-page .table-head span {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.admin-page .table-empty {
+  padding: 40px 0;
+  text-align: center;
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.admin-page .pager {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 0 2px;
+}
+
+.admin-page .user-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.admin-page .avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.38), rgba(29, 78, 216, 0.2));
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  color: #dbeafe;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.admin-page .user-cell-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.admin-page .user-cell-main strong {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.admin-page .user-cell-main span {
+  color: var(--app-muted);
+  font-size: 11px;
+}
+
+.admin-page .cell-sub {
+  display: block;
+  margin-top: 2px;
+  color: var(--app-muted);
+  font-size: 11px;
+}
+
+.admin-page .money {
+  font-family: "JetBrains Mono", Consolas, Monaco, monospace;
+  font-size: 12.5px;
+}
+
+.admin-page .actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.admin-page .detail-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 18px;
+}
+
+.admin-page .detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.admin-page .detail-item.full {
+  grid-column: 1 / -1;
+}
+
+.admin-page .detail-item span {
+  color: var(--app-muted);
+  font-size: 11.5px;
+}
+
+.admin-page .detail-item strong {
+  font-size: 13px;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.admin-page .detail-section {
+  margin: 22px 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.admin-page .prompt-block {
+  margin: 0;
+  padding: 12px 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--app-surface-2);
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  color: var(--app-text);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+@media (max-width: 1100px) {
+  .admin-page {
+    padding: 20px 20px 40px;
+  }
+
+  .admin-page .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .admin-page {
+    padding: 16px 14px 36px;
+  }
+
+  .admin-page .stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-page .filter-search,
+  .admin-page .filter-item {
+    width: 100%;
+  }
+
+  .admin-page .filter-action {
+    margin-left: 0;
+  }
+
+  .admin-page .detail-list {
+    grid-template-columns: 1fr;
+  }
+}
