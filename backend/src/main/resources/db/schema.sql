@@ -1,6 +1,6 @@
 -- 灵犀初始化表结构（MySQL 8.0）
--- 说明：初始化阶段包含已落地模块（B1 用户、B7 任务、AI 应用、API Key、通知、设备、技能、连接器、B8 产物）所需表。
--- 其余 B2-B12 表随模块迭代补充，规划见 docs/数据库设计.md。
+-- 说明：初始化阶段包含已落地模块（B1 用户、B7 任务、AI 应用、API Key、通知、设备、技能、连接器、B8 产物、B3 订单）所需表。
+-- 其余 B2、B4-B12 表随模块迭代补充，规划见 docs/数据库设计.md。
 
 SET NAMES utf8mb4;
 
@@ -195,3 +195,25 @@ CREATE TABLE IF NOT EXISTS artifact (
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_general_ci COMMENT = '创作产物';
+
+CREATE TABLE IF NOT EXISTS biz_order (
+    id          BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    order_no    VARCHAR(32)    NOT NULL COMMENT '订单号',
+    user_id     BIGINT         NOT NULL COMMENT '下单用户',
+    description VARCHAR(128)   NOT NULL COMMENT '订单描述',
+    type        VARCHAR(16)    NOT NULL DEFAULT 'CONSUME' COMMENT 'RECHARGE/SUBSCRIPTION/CONSUME/REDEEM',
+    amount      DECIMAL(18, 6) NOT NULL DEFAULT 0 COMMENT '订单金额（积分）',
+    pay_method  VARCHAR(16)             DEFAULT NULL COMMENT 'ALIPAY/WECHAT/REDEEM/CREDITS',
+    status      VARCHAR(16)    NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING/PAID/CANCELLED/REFUNDING/REFUNDED',
+    paid_at     DATETIME                DEFAULT NULL COMMENT '支付完成时间',
+    created_at  DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at  DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted     TINYINT        NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_biz_order_no (order_no),
+    KEY idx_biz_order_user (user_id, deleted, created_at),
+    -- 资金类表必须能追溯到真实用户，避免脏数据产生孤儿订单
+    CONSTRAINT fk_biz_order_user FOREIGN KEY (user_id) REFERENCES sys_user (id)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci COMMENT = '业务订单';

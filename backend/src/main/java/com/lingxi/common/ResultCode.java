@@ -66,6 +66,12 @@ public enum ResultCode {
     ARTIFACT_NOT_FOUND(8601, "产物不存在"),
     ARTIFACT_NOT_OWNED(8602, "无权操作该产物"),
 
+    /* 订单：8701-8799 */
+    ORDER_NOT_FOUND(8701, "订单不存在"),
+    ORDER_NOT_OWNED(8702, "无权操作该订单"),
+    ORDER_STATUS_INVALID(8703, "订单状态不支持该操作"),
+    ORDER_NOT_EDITABLE(8704, "当前状态不允许修改订单"),
+
     /* 管理端用户：9001-9099 */
     USERNAME_TAKEN(9001, "用户名已存在"),
     CANNOT_DELETE_SELF(9002, "不能删除当前登录账号"),
