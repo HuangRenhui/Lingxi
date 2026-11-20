@@ -239,7 +239,8 @@ import EmptyState from '@/components/EmptyState.vue'
 import TabStrip from '@/components/TabStrip.vue'
 import { getTool, modelOptionsOf, showcases } from '@/config/tools'
 import { MODEL_FIELD_KEYS, optionNames, unitPrice } from '@/utils/model-catalog'
-import { addAsset, chargeCredits, refundCredits } from '@/mock/platform'
+import { chargeCredits, refundCredits } from '@/mock/platform'
+import { createArtifact } from '@/api/artifact'
 import FieldRenderer from './fields/FieldRenderer.vue'
 import PricingDialog from './PricingDialog.vue'
 
@@ -543,7 +544,7 @@ function generate() {
   }
 
   // 前端演示：图片/视频使用本地示例图，音乐生成曲目卡
-  generateTimer = window.setTimeout(() => {
+  generateTimer = window.setTimeout(async () => {
     generateTimer = null
     const charge = pendingCharge
     try {
@@ -555,21 +556,16 @@ function generate() {
       // 产物未落盘等于生成失败：保留扣费会让用户白扣积分
       if (!persist()) throw new Error('persist failed')
 
-      // 产物入作品库并进入待审核队列，后台内容审核可直接看到
-      addAsset({
-        id: `as-${task.id}`,
+      // 产物入作品库（后端 artifacts），作品库页面读取同一份数据
+      await createArtifact({
         type: task.kind === 'music' ? 'music' : task.kind === 'video' ? 'video' : 'image',
         toolKey: tool.value.key,
-        tool: tool.value.title,
+        toolName: tool.value.title,
         title: task.title,
         prompt: task.prompt,
         url: task.file || task.image,
-        thumb: task.image,
-        size: '—',
-        createdAt: dayjs().format('YYYY-MM-DD HH:mm'),
-        favorite: false,
-        trashed: false,
-        status: 'PENDING'
+        posterUrl: task.image,
+        sizeBytes: 0
       })
 
       // 产物已写入，本次扣费有效

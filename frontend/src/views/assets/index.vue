@@ -136,18 +136,18 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
 import StatCard from '@/components/StatCard.vue'
 import TabStrip from '@/components/TabStrip.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import { loadAssets, saveAssets } from '@/mock/account'
+import { deleteArtifact, listArtifacts, updateArtifact } from '@/api/artifact'
 import { classOf } from '@/utils/text'
 
 const router = useRouter()
-const assets = ref(loadAssets())
+const assets = ref([])
 const tab = ref('all')
 const keyword = ref('')
 const type = ref('all')
@@ -155,6 +155,48 @@ const sort = ref('new')
 const selected = ref([])
 const previewVisible = ref(false)
 const previewItem = ref(null)
+
+/** 字节数转可读大小，列表排序依赖字符串里的数字 */
+function formatSize(bytes) {
+  const value = Number(bytes || 0)
+  if (!value) return '—'
+  if (value >= 1024 * 1024 * 1024) return `${(value / 1024 / 1024 / 1024).toFixed(1)} GB`
+  if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`
+  if (value >= 1024) return `${(value / 1024).toFixed(1)} KB`
+  return `${value} B`
+}
+
+/** 后端用 Integer 0/1 表示收藏与回收站，页面模板按布尔使用 */
+function normalizeArtifact(item) {
+  return {
+    id: item.id,
+    title: item.title || '',
+    type: item.type || '',
+    toolKey: item.toolKey || '',
+    toolName: item.toolName || '',
+    prompt: item.prompt || '',
+    url: item.url || '',
+    posterUrl: item.posterUrl || '',
+    size: formatSize(item.sizeBytes),
+    sizeBytes: Number(item.sizeBytes || 0),
+    favorite: Number(item.favorite) === 1,
+    trashed: Number(item.trashed) === 1,
+    status: item.status || '',
+    createdAt: item.createdAt || ''
+  }
+}
+
+async function loadAssetsFromApi() {
+  try {
+    // 不传 trashed，取全部由页面按标签过滤，避免切换标签重复请求
+    const list = await listArtifacts({ page: 1, size: 200 })
+    assets.value = (list || []).map(normalizeArtifact)
+  } catch (error) {
+    assets.value = []
+  }
+}
+
+onMounted(loadAssetsFromApi)
 
 const tabs = [
   { key: 'all', label: '全部作品' },
@@ -203,10 +245,6 @@ const filtered = computed(() => {
   return sorted
 })
 
-function persist() {
-  saveAssets(assets.value)
-}
-
 function typeLabel(value) {
   return { image: '图片', video: '视频', music: '音频' }[value] || value
 }
@@ -236,22 +274,36 @@ function selectAll() {
     : Array.from(new Set([...selected.value, ...ids]))
 }
 
-function toggleFavorite(item) {
-  item.favorite = !item.favorite
-  persist()
-  ElMessage.success(item.favorite ? '已加入收藏' : '已取消收藏')
+async function toggleFavorite(item) {
+  const next = !item.favorite
+  try {
+    await updateArtifact(item.id, { favorite: next ? 1 : 0 })
+    item.favorite = next
+    ElMessage.success(next ? '已加入收藏' : '已取消收藏')
+  } catch (error) {
+    // 请求层已提示
+  }
 }
 
-function moveToTrash(item) {
-  item.trashed = true
-  persist()
-  ElMessage.success('已移入回收站')
+async function moveToTrash(item) {
+  try {
+    await updateArtifact(item.id, { trashed: 1 })
+    item.trashed = true
+    selected.value = selected.value.filter(id => id !== item.id)
+    ElMessage.success('已移入回收站')
+  } catch (error) {
+    // 请求层已提示
+  }
 }
 
-function restore(item) {
-  item.trashed = false
-  persist()
-  ElMessage.success('已还原到作品列表')
+async function restore(item) {
+  try {
+    await updateArtifact(item.id, { trashed: 0 })
+    item.trashed = false
+    ElMessage.success('已还原到作品列表')
+  } catch (error) {
+    // 请求层已提示
+  }
 }
 
 async function destroy(item) {
@@ -264,10 +316,14 @@ async function destroy(item) {
   } catch (error) {
     return
   }
-  assets.value = assets.value.filter(entry => entry.id !== item.id)
-  selected.value = selected.value.filter(id => id !== item.id)
-  persist()
-  ElMessage.success('已彻底删除')
+  try {
+    await deleteArtifact(item.id)
+    assets.value = assets.value.filter(entry => entry.id !== item.id)
+    selected.value = selected.value.filter(id => id !== item.id)
+    ElMessage.success('已彻底删除')
+  } catch (error) {
+    // 请求层已提示
+  }
 }
 
 // 常见可下载媒体后缀：优先按源文件真实后缀命名，避免 mp4/webm/mov 都被写成 .wav
@@ -302,12 +358,21 @@ function download(item) {
   document.body.removeChild(link)
 }
 
-function favoriteSelected() {
-  assets.value.forEach(item => {
-    if (isSelected(item.id)) item.favorite = true
-  })
-  persist()
-  ElMessage.success(`已收藏 ${selected.value.length} 个作品`)
+async function favoriteSelected() {
+  const targets = assets.value.filter(item => isSelected(item.id) && !item.favorite)
+  if (!targets.length) {
+    ElMessage.info('所选作品都已收藏')
+    return
+  }
+  try {
+    await Promise.all(targets.map(item => updateArtifact(item.id, { favorite: 1 })))
+    targets.forEach(item => {
+      item.favorite = true
+    })
+    ElMessage.success(`已收藏 ${targets.length} 个作品`)
+  } catch (error) {
+    await loadAssetsFromApi()
+  }
 }
 
 // 批量下载是「串行 + 间隔」的异步流程，页面卸载后必须停止，否则会继续操作已销毁的组件
@@ -355,22 +420,40 @@ async function downloadSelected() {
   }
 }
 
-function trashSelected() {
-  assets.value.forEach(item => {
-    if (isSelected(item.id)) item.trashed = true
-  })
-  persist()
-  ElMessage.success('已移入回收站')
-  selected.value = []
+async function trashSelected() {
+  const targets = assets.value.filter(item => isSelected(item.id) && !item.trashed)
+  if (!targets.length) {
+    ElMessage.info('请先选择作品')
+    return
+  }
+  try {
+    await Promise.all(targets.map(item => updateArtifact(item.id, { trashed: 1 })))
+    targets.forEach(item => {
+      item.trashed = true
+    })
+    ElMessage.success('已移入回收站')
+    selected.value = []
+  } catch (error) {
+    await loadAssetsFromApi()
+  }
 }
 
-function restoreSelected() {
-  assets.value.forEach(item => {
-    if (isSelected(item.id)) item.trashed = false
-  })
-  persist()
-  ElMessage.success('已批量还原')
-  selected.value = []
+async function restoreSelected() {
+  const targets = assets.value.filter(item => isSelected(item.id) && item.trashed)
+  if (!targets.length) {
+    ElMessage.info('请先选择回收站中的作品')
+    return
+  }
+  try {
+    await Promise.all(targets.map(item => updateArtifact(item.id, { trashed: 0 })))
+    targets.forEach(item => {
+      item.trashed = false
+    })
+    ElMessage.success('已批量还原')
+    selected.value = []
+  } catch (error) {
+    await loadAssetsFromApi()
+  }
 }
 
 function openPreview(item) {
