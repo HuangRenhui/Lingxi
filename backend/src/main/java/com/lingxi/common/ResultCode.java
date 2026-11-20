@@ -39,5 +39,9 @@ public enum ResultCode {
 
 /* API Key：8101-8199 */
     API_KEY_NOT_FOUND(8101, "密钥不存在"),
-    API_KEY_NOT_OWNED(8102, "无权操作该密钥");
+    API_KEY_NOT_OWNED(8102, "无权操作该密钥"),
+
+/* 通知：8201-8299 */
+    NOTIFICATION_NOT_FOUND(8201, "通知不存在"),
+    NOTIFICATION_NOT_OWNED(8202, "无权操作该通知");
 }

@@ -285,6 +285,11 @@ lingxi/
 | GET / PUT / DELETE | `/api/applications/{id}` | 应用详情 / 更新 / 删除 |
 | GET / POST | `/api/api-keys` | API Key 列表 / 创建（明文仅创建时返回） |
 | PUT / DELETE | `/api/api-keys/{id}` | 重命名/启停 / 删除 |
+| GET | `/api/notifications` | 通知列表（支持 `unreadOnly`） |
+| GET | `/api/notifications/unread-count` | 未读数量 |
+| PUT | `/api/notifications/{id}/read` | 标记单条已读 |
+| PUT | `/api/notifications/read-all` | 全部已读 |
+| DELETE | `/api/notifications/{id}` | 删除通知 |
 
 完整字段与示例见 [接口文档](./docs/接口文档.md)。
 

@@ -17,3 +17,8 @@ VALUES (1, 1, '每日 AI 资讯汇总',
 INSERT IGNORE INTO ai_application (id, user_id, name, description, app_type, status, deleted)
 VALUES (1, 1, '商品海报工厂', '上传商品图，批量生成营销海报与详情页配图。', 'IMAGE', 1, 0),
        (2, 1, '短视频脚本助手', '根据主题生成分镜、口播文案与发布标题。', 'VIDEO', 1, 0);
+
+INSERT IGNORE INTO notification (id, user_id, title, content, type, read_flag, deleted)
+VALUES (1, 1, '每日资讯任务已完成', '「每日 AI 资讯汇总」第 12 次运行完成，可在任务中心查看结果。', 'TASK', 0, 0),
+       (2, 1, '本月积分即将用完', '当前额度剩余 18%，可在钱包页面充值或升级套餐。', 'BILLING', 0, 0),
+       (3, 1, '新设备登录提醒', '检测到 Chrome / macOS 设备登录，如非本人操作请及时修改密码。', 'SYSTEM', 1, 0);

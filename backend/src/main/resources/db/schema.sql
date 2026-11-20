@@ -1,5 +1,5 @@
 -- 灵犀初始化表结构（MySQL 8.0）
--- 说明：初始化阶段包含已落地模块（B1 用户、B7 任务、AI 应用、API Key）所需表。
+-- 说明：初始化阶段包含已落地模块（B1 用户、B7 任务、AI 应用、API Key、通知）所需表。
 -- 其余 B2-B12 表随模块迭代补充，规划见 docs/数据库设计.md。
 
 SET NAMES utf8mb4;
@@ -102,3 +102,19 @@ CREATE TABLE IF NOT EXISTS api_key (
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_general_ci COMMENT = 'API Key';
+
+CREATE TABLE IF NOT EXISTS notification (
+    id         BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    user_id    BIGINT       NOT NULL COMMENT '接收用户',
+    title      VARCHAR(128) NOT NULL COMMENT '标题',
+    content    VARCHAR(500)          DEFAULT NULL COMMENT '正文',
+    type       VARCHAR(16)  NOT NULL DEFAULT 'SYSTEM' COMMENT 'SYSTEM / TASK / BILLING',
+    read_flag  TINYINT      NOT NULL DEFAULT 0 COMMENT '已读：1 是 / 0 否',
+    created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted    TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    PRIMARY KEY (id),
+    KEY idx_notification_user (user_id, read_flag, deleted)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci COMMENT = '站内通知';
