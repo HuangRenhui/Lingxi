@@ -290,6 +290,8 @@ lingxi/
 | PUT | `/api/notifications/{id}/read` | 标记单条已读 |
 | PUT | `/api/notifications/read-all` | 全部已读 |
 | DELETE | `/api/notifications/{id}` | 删除通知 |
+| GET / POST | `/api/devices` | 登录设备列表 / 新增 |
+| PUT / DELETE | `/api/devices/{id}` | 重命名 / 删除设备 |
 
 完整字段与示例见 [接口文档](./docs/接口文档.md)。
 

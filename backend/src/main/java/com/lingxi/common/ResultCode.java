@@ -43,5 +43,9 @@ public enum ResultCode {
 
 /* 通知：8201-8299 */
     NOTIFICATION_NOT_FOUND(8201, "通知不存在"),
-    NOTIFICATION_NOT_OWNED(8202, "无权操作该通知");
+    NOTIFICATION_NOT_OWNED(8202, "无权操作该通知"),
+
+/* 设备：8301-8399 */
+    DEVICE_NOT_FOUND(8301, "设备不存在"),
+    DEVICE_NOT_OWNED(8302, "无权操作该设备");
 }

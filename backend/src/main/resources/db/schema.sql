@@ -1,5 +1,5 @@
 -- 灵犀初始化表结构（MySQL 8.0）
--- 说明：初始化阶段包含已落地模块（B1 用户、B7 任务、AI 应用、API Key、通知）所需表。
+-- 说明：初始化阶段包含已落地模块（B1 用户、B7 任务、AI 应用、API Key、通知、设备）所需表。
 -- 其余 B2-B12 表随模块迭代补充，规划见 docs/数据库设计.md。
 
 SET NAMES utf8mb4;
@@ -118,3 +118,22 @@ CREATE TABLE IF NOT EXISTS notification (
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_general_ci COMMENT = '站内通知';
+
+CREATE TABLE IF NOT EXISTS user_device (
+    id             BIGINT      NOT NULL AUTO_INCREMENT COMMENT '主键',
+    user_id        BIGINT      NOT NULL COMMENT '属主用户',
+    name           VARCHAR(64) NOT NULL COMMENT '设备名称',
+    os             VARCHAR(32)          DEFAULT NULL COMMENT '操作系统',
+    browser        VARCHAR(32)          DEFAULT NULL COMMENT '浏览器',
+    ip             VARCHAR(45)          DEFAULT NULL COMMENT '登录 IP',
+    location       VARCHAR(64)          DEFAULT NULL COMMENT '登录地',
+    current_flag   TINYINT     NOT NULL DEFAULT 0 COMMENT '当前设备：1 是 / 0 否',
+    last_active_at DATETIME             DEFAULT NULL COMMENT '最近活跃时间',
+    created_at     DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at     DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted        TINYINT     NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    PRIMARY KEY (id),
+    KEY idx_user_device_user (user_id, deleted)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci COMMENT = '登录设备';

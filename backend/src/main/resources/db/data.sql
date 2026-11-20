@@ -22,3 +22,7 @@ INSERT IGNORE INTO notification (id, user_id, title, content, type, read_flag, d
 VALUES (1, 1, '每日资讯任务已完成', '「每日 AI 资讯汇总」第 12 次运行完成，可在任务中心查看结果。', 'TASK', 0, 0),
        (2, 1, '本月积分即将用完', '当前额度剩余 18%，可在钱包页面充值或升级套餐。', 'BILLING', 0, 0),
        (3, 1, '新设备登录提醒', '检测到 Chrome / macOS 设备登录，如非本人操作请及时修改密码。', 'SYSTEM', 1, 0);
+
+INSERT IGNORE INTO user_device (id, user_id, name, os, browser, ip, location, current_flag, last_active_at, deleted)
+VALUES (1, 1, '工作台 MacBook', 'macOS 15', 'Chrome 131', '127.0.0.1', '本地', 1, NOW(), 0),
+       (2, 1, '备用 Windows', 'Windows 11', 'Edge 131', '192.168.1.20', '局域网', 0, NOW(), 0);
