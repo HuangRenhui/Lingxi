@@ -41,3 +41,12 @@ VALUES (1, 1, 'GitHub', '管理仓库、Issue、Pull Request 与 Actions 工作�
         'HTTP', 'https://mcp.example.com/github', 1, 0),
        (2, 1, 'Notion', '读写 Notion 页面与数据库，同步项目进度。',
         'SSE', 'https://mcp.example.com/notion/sse', 0, 0);
+
+INSERT IGNORE INTO artifact (id, user_id, title, type, tool_key, tool_name, prompt, url, poster_url,
+                             size_bytes, favorite, trashed, status, deleted)
+VALUES (1, 1, '蓝调雪后山地旅舍', 'IMAGE', 'nanobanana', 'Nano Banana',
+        '覆雪木石旅舍坐落冷蓝山林，窗内暖光与入口灯笼，安静归宿感，电影感构图。',
+        '/images/showcase-sc-nano-lodge.jpg', NULL, 2516582, 1, 0, 'APPROVED', 0),
+       (2, 1, '墨河山径初醒', 'VIDEO', 'seedance', 'SeeDance',
+        '黑色河流笔触向下流动，纸层山峦徐徐展开，朱红小径从雾中浮现，东方水墨动画。',
+        '/media/demo-video-ink.mp4', '/images/showcase-sc-seedance-ink.jpg', 19503514, 0, 0, 'APPROVED', 0);

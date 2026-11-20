@@ -35,11 +35,12 @@ The frontend ships a built-in mock layer, so every page works locally without th
 | Model gateway (B2) | ⬜ Planned |
 | Scheduler and multi-round agent loop (B7) | ⬜ Planned |
 | Billing / wallet / subscription / payment (B3-B6) | ⬜ Backend planned; frontend demo pages done |
-| Artifacts / usage / admin / reports / local channel (B8-B12) | ⬜ Backend planned; frontend demo pages done |
+| Artifacts (B8) | 🟡 List / detail / create / update / delete APIs done |
+| Usage / admin / reports / local channel (B9-B12) | ⬜ Backend planned; frontend demo pages done |
 
 Demo account: `admin / Admin@123` (initialization only; change before deployment).
 
-> Except for login and task management, business pages currently read demo data from `frontend/src/mock`, stored in the browser's `localStorage` and independent of the backend.
+> Except for login, tasks and base management APIs, business pages currently read demo data from `frontend/src/mock`, stored in the browser's `localStorage` and independent of the backend.
 
 ## Core Design
 

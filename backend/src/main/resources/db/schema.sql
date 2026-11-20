@@ -1,5 +1,5 @@
 -- 灵犀初始化表结构（MySQL 8.0）
--- 说明：初始化阶段包含已落地模块（B1 用户、B7 任务、AI 应用、API Key、通知、设备、技能、连接器）所需表。
+-- 说明：初始化阶段包含已落地模块（B1 用户、B7 任务、AI 应用、API Key、通知、设备、技能、连接器、B8 产物）所需表。
 -- 其余 B2-B12 表随模块迭代补充，规划见 docs/数据库设计.md。
 
 SET NAMES utf8mb4;
@@ -171,3 +171,27 @@ CREATE TABLE IF NOT EXISTS ai_mcp_server (
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_general_ci COMMENT = '连接器（MCP Server）';
+
+CREATE TABLE IF NOT EXISTS artifact (
+    id         BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    user_id    BIGINT       NOT NULL COMMENT '属主用户',
+    title      VARCHAR(128) NOT NULL COMMENT '作品标题',
+    type       VARCHAR(16)  NOT NULL COMMENT 'IMAGE / VIDEO / AUDIO',
+    tool_key   VARCHAR(64)           DEFAULT NULL COMMENT '创作工具标识',
+    tool_name  VARCHAR(64)           DEFAULT NULL COMMENT '创作工具名称',
+    prompt     TEXT                  NULL COMMENT '生成提示词',
+    url        VARCHAR(512) NOT NULL COMMENT '产物地址或对象存储 Key',
+    poster_url VARCHAR(512)          DEFAULT NULL COMMENT '视频封面地址',
+    size_bytes BIGINT       NOT NULL DEFAULT 0 COMMENT '文件大小（字节）',
+    favorite   TINYINT      NOT NULL DEFAULT 0 COMMENT '收藏：1 是 / 0 否',
+    trashed    TINYINT      NOT NULL DEFAULT 0 COMMENT '回收站：1 是 / 0 否',
+    status     VARCHAR(16)  NOT NULL DEFAULT 'APPROVED' COMMENT 'PENDING / APPROVED / REJECTED',
+    created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted    TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    PRIMARY KEY (id),
+    KEY idx_artifact_user (user_id, deleted, trashed),
+    KEY idx_artifact_user_created (user_id, created_at)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci COMMENT = '创作产物';

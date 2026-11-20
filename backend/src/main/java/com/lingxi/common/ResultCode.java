@@ -62,6 +62,10 @@ public enum ResultCode {
     CONNECTOR_NOT_FOUND(8501, "连接器不存在"),
     CONNECTOR_NOT_OWNED(8502, "无权操作该连接器"),
 
+    /* 产物：8601-8699 */
+    ARTIFACT_NOT_FOUND(8601, "产物不存在"),
+    ARTIFACT_NOT_OWNED(8602, "无权操作该产物"),
+
     /* 管理端用户：9001-9099 */
     USERNAME_TAKEN(9001, "用户名已存在"),
     CANNOT_DELETE_SELF(9002, "不能删除当前登录账号"),
