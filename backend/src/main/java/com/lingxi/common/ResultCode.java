@@ -37,15 +37,37 @@ public enum ResultCode {
     APPLICATION_NOT_FOUND(8001, "应用不存在"),
     APPLICATION_NOT_OWNED(8002, "无权操作该应用"),
 
-/* API Key：8101-8199 */
+    /* API Key：8101-8199 */
     API_KEY_NOT_FOUND(8101, "密钥不存在"),
     API_KEY_NOT_OWNED(8102, "无权操作该密钥"),
 
-/* 通知：8201-8299 */
+    /* 通知：8201-8299 */
     NOTIFICATION_NOT_FOUND(8201, "通知不存在"),
     NOTIFICATION_NOT_OWNED(8202, "无权操作该通知"),
 
-/* 设备：8301-8399 */
+    /* 设备：8301-8399 */
     DEVICE_NOT_FOUND(8301, "设备不存在"),
-    DEVICE_NOT_OWNED(8302, "无权操作该设备");
+    DEVICE_NOT_OWNED(8302, "无权操作该设备"),
+
+    /* 管理端用户：9001-9099 */
+    USERNAME_TAKEN(9001, "用户名已存在"),
+    CANNOT_DELETE_SELF(9002, "不能删除当前登录账号"),
+    ADMIN_REQUIRED(9003, "需要管理员权限"),
+    SELF_OPERATION_FORBIDDEN(9004, "不能停用或降级当前登录账号");
+
+    private final int code;
+    private final String message;
+
+    ResultCode(int code, String message) {
+        this.code = code;
+        this.message = message;
+    }
+
+    public int getCode() {
+        return code;
+    }
+
+    public String getMessage() {
+        return message;
+    }
 }

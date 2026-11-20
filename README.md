@@ -292,6 +292,10 @@ lingxi/
 | DELETE | `/api/notifications/{id}` | 删除通知 |
 | GET / POST | `/api/devices` | 登录设备列表 / 新增 |
 | PUT / DELETE | `/api/devices/{id}` | 重命名 / 删除设备 |
+| GET | `/api/admin/users` | 用户列表（ADMIN） |
+| GET | `/api/admin/users/{id}` | 用户详情（ADMIN） |
+| POST | `/api/admin/users` | 新建用户（ADMIN） |
+| PUT / DELETE | `/api/admin/users/{id}` | 更新 / 删除用户（ADMIN） |
 
 完整字段与示例见 [接口文档](./docs/接口文档.md)。
 
