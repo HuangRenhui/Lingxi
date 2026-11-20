@@ -20,6 +20,11 @@ public enum ResultCode {
     REQUEST_BODY_ERROR(4001, "请求体格式错误"),
     PARAM_TYPE_MISMATCH(4002, "请求参数类型不匹配"),
 
+    /* 路由与数据约束：4101-4199 */
+    METHOD_NOT_ALLOWED(4101, "请求方法不支持"),
+    API_NOT_FOUND(4102, "接口不存在"),
+    DATA_CONFLICT(4103, "数据已存在或违反唯一约束"),
+
     /* 用户与认证：2001-2099 */
     INVALID_CREDENTIALS(2001, "用户名或密码错误"),
     ACCOUNT_DISABLED(2002, "账号已被禁用"),
@@ -48,6 +53,14 @@ public enum ResultCode {
     /* 设备：8301-8399 */
     DEVICE_NOT_FOUND(8301, "设备不存在"),
     DEVICE_NOT_OWNED(8302, "无权操作该设备"),
+
+    /* 技能：8401-8499 */
+    SKILL_NOT_FOUND(8401, "技能不存在"),
+    SKILL_NOT_OWNED(8402, "无权操作该技能"),
+
+    /* 连接器：8501-8599 */
+    CONNECTOR_NOT_FOUND(8501, "连接器不存在"),
+    CONNECTOR_NOT_OWNED(8502, "无权操作该连接器"),
 
     /* 管理端用户：9001-9099 */
     USERNAME_TAKEN(9001, "用户名已存在"),

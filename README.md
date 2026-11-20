@@ -2,7 +2,7 @@
 
 [English](./README.en.md) | 简体中文
 
-> 可运行、可部署的 AI 创作平台：前端 Vue 3 + Element Plus（用户端与管理后台全量页面，内置演示数据可独立运行），后端 Spring Boot + B1-B12 业务模块；当前后端已落地登录、令牌刷新/注销与 B7 任务定义管理，**B7 无人值守 Agent 编排引擎是后续里程碑的核心方向**。
+> 可运行、可部署的 AI 创作平台：前端 Vue 3 + Element Plus（用户端与管理后台全量页面，内置演示数据可独立运行），后端 Spring Boot + B1-B12 业务模块；当前后端已落地登录、令牌刷新/注销、B7 任务定义与 AI 应用 / API Key / 通知 / 设备 / 技能 / 连接器等基础管理接口，**B7 无人值守 Agent 编排引擎是后续里程碑的核心方向**。
 
 ![Java](https://img.shields.io/badge/Java-8-orange)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.18-brightgreen)
@@ -29,6 +29,7 @@
 | 项目骨架（前后端 + Docker + 文档） | ✅ |
 | 登录 / JWT 鉴权 / 令牌刷新与注销 / 当前用户 | ✅ |
 | 定时任务列表、新建、编辑、启停、删除 | ✅ |
+| AI 应用 / API Key / 通知 / 设备 / 技能 / 连接器管理 | ✅ 后端接口 |
 | 用户端页面（首页、8 个对话应用、22 个创作工具、任务、作品、控制台 10 页、账号 3 页） | ✅ 前端完成（演示数据） |
 | 管理后台（19 个页面、管理员登录、隐藏入口、分组导航） | ✅ 前端完成（演示数据） |
 | 计费规则成本核算（输入/输出/缓存分档、毛利预警） | ✅ 前端完成（演示数据） |
@@ -38,7 +39,7 @@
 | 计费 / 钱包 / 订阅 / 支付（B3-B6） | ⬜ 后端规划，前端演示页已完成 |
 | 产物 / 用量 / 后台 / 报表 / 本机通道（B8-B12） | ⬜ 后端规划，前端演示页已完成 |
 
-> 除登录与定时任务管理外，其余业务页面当前均使用 `frontend/src/mock` 下的演示数据，数据保存在浏览器 `localStorage`，不依赖后端。
+> 登录、定时任务以及上述基础管理能力 已提供后端接口；其余业务页面当前仍使用 `frontend/src/mock` 下的演示数据，数据保存在浏览器 `localStorage`，不依赖后端。
 
 ## 核心设计
 
@@ -296,6 +297,10 @@ lingxi/
 | GET | `/api/admin/users/{id}` | 用户详情（ADMIN） |
 | POST | `/api/admin/users` | 新建用户（ADMIN） |
 | PUT / DELETE | `/api/admin/users/{id}` | 更新 / 删除用户（ADMIN） |
+| GET / POST | `/api/skills` | 技能列表 / 新建 |
+| GET / PUT / DELETE | `/api/skills/{id}` | 技能详情 / 更新 / 删除 |
+| GET / POST | `/api/connectors` | 连接器列表 / 新建 |
+| GET / PUT / DELETE | `/api/connectors/{id}` | 连接器详情 / 更新 / 删除 |
 
 完整字段与示例见 [接口文档](./docs/接口文档.md)。
 

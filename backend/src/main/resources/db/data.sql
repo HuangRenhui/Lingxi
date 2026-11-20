@@ -1,5 +1,6 @@
 -- 灵犀初始化数据（幂等，可重复执行）
--- 默认账号：admin / Admin@123（仅用于本地与演示环境，上线前必须修改）
+-- 警告：本脚本包含演示管理员账号，仅用于本地开发环境。
+-- 生产环境请勿执行本脚本，或执行后立即通过环境变量/管理接口重置管理员口令；口令不以明文写入仓库。
 
 INSERT IGNORE INTO sys_user (id, username, password, nickname, role, status, deleted)
 VALUES (1, 'admin', '$2b$10$TyGTQFtbQpWK9kseDlLHC.YyE/kMhpNgdvTJ7b5YsqRL.5Rnw09NC', '演示管理员', 'ADMIN', 1, 0);
@@ -26,3 +27,17 @@ VALUES (1, 1, '每日资讯任务已完成', '「每日 AI 资讯汇总」第 12
 INSERT IGNORE INTO user_device (id, user_id, name, os, browser, ip, location, current_flag, last_active_at, deleted)
 VALUES (1, 1, '工作台 MacBook', 'macOS 15', 'Chrome 131', '127.0.0.1', '本地', 1, NOW(), 0),
        (2, 1, '备用 Windows', 'Windows 11', 'Edge 131', '192.168.1.20', '局域网', 0, NOW(), 0);
+
+INSERT IGNORE INTO ai_skill (id, user_id, name, description, content, category, status, deleted)
+VALUES (1, 1, '/github', '管理 GitHub issues、pull requests、仓库检索与 Actions 工作流。',
+        '# GitHub\n\n当用户提到仓库、Issue、PR 或发布时使用本技能。', 'OFFICIAL', 1, 0),
+       (2, 1, '/web-search', '联网检索并提取网页正文，返回带来源的摘要。',
+        '# Web Search\n\n搜索公开网页，抓取正文并给出引用。', 'OFFICIAL', 1, 0),
+       (3, 1, '/weekly-report', '整理一周数据并生成结构化周报。',
+        '# Weekly Report\n\n汇总本周数据，输出要点、图表说明与结论。', 'COMMUNITY', 1, 0);
+
+INSERT IGNORE INTO ai_mcp_server (id, user_id, name, description, server_type, endpoint, status, deleted)
+VALUES (1, 1, 'GitHub', '管理仓库、Issue、Pull Request 与 Actions 工作流。',
+        'HTTP', 'https://mcp.example.com/github', 1, 0),
+       (2, 1, 'Notion', '读写 Notion 页面与数据库，同步项目进度。',
+        'SSE', 'https://mcp.example.com/notion/sse', 0, 0);

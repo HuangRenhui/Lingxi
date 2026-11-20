@@ -1,5 +1,5 @@
 -- 灵犀初始化表结构（MySQL 8.0）
--- 说明：初始化阶段包含已落地模块（B1 用户、B7 任务、AI 应用、API Key、通知、设备）所需表。
+-- 说明：初始化阶段包含已落地模块（B1 用户、B7 任务、AI 应用、API Key、通知、设备、技能、连接器）所需表。
 -- 其余 B2-B12 表随模块迭代补充，规划见 docs/数据库设计.md。
 
 SET NAMES utf8mb4;
@@ -137,3 +137,37 @@ CREATE TABLE IF NOT EXISTS user_device (
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_general_ci COMMENT = '登录设备';
+
+CREATE TABLE IF NOT EXISTS ai_skill (
+    id          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    user_id     BIGINT       NOT NULL COMMENT '属主用户',
+    name        VARCHAR(64)  NOT NULL COMMENT '技能名称，以 / 开头',
+    description VARCHAR(255)          DEFAULT NULL COMMENT '技能简介',
+    content     TEXT         NOT NULL COMMENT '技能内容（Markdown）',
+    category    VARCHAR(16)  NOT NULL DEFAULT 'COMMUNITY' COMMENT 'OFFICIAL / COMMUNITY',
+    status      TINYINT      NOT NULL DEFAULT 1 COMMENT '状态：1 启用 / 0 停用',
+    created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted     TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    PRIMARY KEY (id),
+    KEY idx_ai_skill_user (user_id, deleted)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci COMMENT = '技能定义';
+
+CREATE TABLE IF NOT EXISTS ai_mcp_server (
+    id          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    user_id     BIGINT       NOT NULL COMMENT '属主用户',
+    name        VARCHAR(64)  NOT NULL COMMENT '连接器名称',
+    description VARCHAR(255)          DEFAULT NULL COMMENT '连接器简介',
+    server_type VARCHAR(16)  NOT NULL DEFAULT 'HTTP' COMMENT 'HTTP / SSE / STDIO',
+    endpoint    VARCHAR(512)          DEFAULT NULL COMMENT '服务地址或启动命令',
+    status      TINYINT      NOT NULL DEFAULT 0 COMMENT '状态：1 已连接 / 0 未连接',
+    created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted     TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    PRIMARY KEY (id),
+    KEY idx_ai_mcp_server_user (user_id, deleted)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci COMMENT = '连接器（MCP Server）';
