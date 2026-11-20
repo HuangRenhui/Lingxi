@@ -9,7 +9,7 @@
 ![Vue](https://img.shields.io/badge/Vue-3.5-42b883)
 ![MySQL](https://img.shields.io/badge/MySQL-8.0-4479a1)
 ![Redis](https://img.shields.io/badge/Redis-7.x-dc382d)
-![License](https://img.shields.io/badge/License-TBD-lightgrey)
+![License](https://img.shields.io/badge/License-Apache%202.0-blue)
 
 ## 项目简介
 
@@ -352,4 +352,6 @@ lingxi/
 
 ## License
 
-本项目暂未附带许可证文件。确定分发方式后补充 LICENSE。
+本项目基于 [Apache License 2.0](LICENSE) 分发，完整条款见仓库根目录的 [`LICENSE`](LICENSE) 文件。
+
+你可以自由使用、修改与再分发，包括商业用途，但需保留版权与许可声明，并在修改过的文件中注明变更。

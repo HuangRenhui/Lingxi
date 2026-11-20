@@ -5,6 +5,8 @@ backend/target/
 !.mvn/wrapper/maven-wrapper.jar
 backend/logs/
 *.log
+# 本地启动脚本重定向的标准错误输出
+*.err
 
 # Node
 frontend/node_modules/
