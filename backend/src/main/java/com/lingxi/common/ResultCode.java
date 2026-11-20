@@ -72,6 +72,10 @@ public enum ResultCode {
     ORDER_STATUS_INVALID(8703, "订单状态不支持该操作"),
     ORDER_NOT_EDITABLE(8704, "当前状态不允许修改订单"),
 
+    /* 钱包：8801-8899 */
+    WALLET_NOT_FOUND(8801, "钱包账户不存在"),
+    INSUFFICIENT_BALANCE(8802, "积分余额不足"),
+
     /* 管理端用户：9001-9099 */
     USERNAME_TAKEN(9001, "用户名已存在"),
     CANNOT_DELETE_SELF(9002, "不能删除当前登录账号"),

@@ -1,6 +1,6 @@
 -- 灵犀初始化表结构（MySQL 8.0）
--- 说明：初始化阶段包含已落地模块（B1 用户、B7 任务、AI 应用、API Key、通知、设备、技能、连接器、B8 产物、B3 订单）所需表。
--- 其余 B2、B4-B12 表随模块迭代补充，规划见 docs/数据库设计.md。
+-- 说明：初始化阶段包含已落地模块（B1 用户、B7 任务、AI 应用、API Key、通知、设备、技能、连接器、B8 产物、B3 订单、B4 钱包）所需表。
+-- 其余 B2、B5-B12 表随模块迭代补充，规划见 docs/数据库设计.md。
 
 SET NAMES utf8mb4;
 
@@ -217,3 +217,38 @@ CREATE TABLE IF NOT EXISTS biz_order (
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_general_ci COMMENT = '业务订单';
+
+CREATE TABLE IF NOT EXISTS wallet_account (
+    id             BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    user_id        BIGINT         NOT NULL COMMENT '属主用户',
+    balance        DECIMAL(18, 6) NOT NULL DEFAULT 0 COMMENT '可用余额（积分）',
+    frozen         DECIMAL(18, 6) NOT NULL DEFAULT 0 COMMENT '冻结金额（积分）',
+    total_recharge DECIMAL(18, 6) NOT NULL DEFAULT 0 COMMENT '累计充值（积分）',
+    total_spent    DECIMAL(18, 6) NOT NULL DEFAULT 0 COMMENT '累计消费（积分）',
+    created_at     DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at     DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted        TINYINT        NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_wallet_account_user (user_id),
+    CONSTRAINT fk_wallet_account_user FOREIGN KEY (user_id) REFERENCES sys_user (id)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci COMMENT = '钱包账户';
+
+CREATE TABLE IF NOT EXISTS wallet_transaction (
+    id         BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    user_id    BIGINT         NOT NULL COMMENT '属主用户',
+    type       VARCHAR(16)    NOT NULL COMMENT 'RECHARGE/CONSUME/REWARD/REFUND/FREEZE/UNFREEZE',
+    amount     DECIMAL(18, 6) NOT NULL COMMENT '变动值，正增负减',
+    balance    DECIMAL(18, 6) NOT NULL COMMENT '变动后余额',
+    note       VARCHAR(255)            DEFAULT NULL COMMENT '备注',
+    biz_no     VARCHAR(64)             DEFAULT NULL COMMENT '业务幂等键，如 ORDER-<订单号>',
+    created_at DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (id),
+    -- 幂等键唯一：支付回调/客户端重试只会入账一次（NULL 不受唯一约束限制）
+    UNIQUE KEY uk_wallet_transaction_biz_no (biz_no),
+    KEY idx_wallet_transaction_user (user_id, created_at),
+    CONSTRAINT fk_wallet_transaction_user FOREIGN KEY (user_id) REFERENCES sys_user (id)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci COMMENT = '钱包流水（只追加）';

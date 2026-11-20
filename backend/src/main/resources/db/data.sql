@@ -51,6 +51,16 @@ VALUES (1, 1, '蓝调雪后山地旅舍', 'IMAGE', 'nanobanana', 'Nano Banana',
         '黑色河流笔触向下流动，纸层山峦徐徐展开，朱红小径从雾中浮现，东方水墨动画。',
         '/media/demo-video-ink.mp4', '/images/showcase-sc-seedance-ink.jpg', 19503514, 0, 0, 'APPROVED', 0);
 
+INSERT IGNORE INTO wallet_account (id, user_id, balance, frozen, total_recharge, total_spent, deleted)
+VALUES (1, 1, 128.600000, 6.400000, 500.000000, 371.400000, 0);
+
+INSERT IGNORE INTO wallet_transaction (id, user_id, type, amount, balance, note, created_at)
+VALUES (1, 1, 'CONSUME', -2.100000, 128.600000, 'Kling · 视频生成', DATE_SUB(NOW(), INTERVAL 2 HOUR)),
+       (2, 1, 'CONSUME', -0.370000, 130.700000, 'SeeDream · 图片生成', DATE_SUB(NOW(), INTERVAL 4 HOUR)),
+       (3, 1, 'RECHARGE', 30.000000, 139.470000, '支付宝充值 · ¥30.00', DATE_SUB(NOW(), INTERVAL 2 DAY)),
+       (4, 1, 'REWARD', 20.000000, 109.470000, '邀请好友注册奖励', DATE_SUB(NOW(), INTERVAL 2 DAY)),
+       (5, 1, 'REFUND', 4.200000, 90.030000, 'Sora 任务失败自动退回', DATE_SUB(NOW(), INTERVAL 5 DAY));
+
 INSERT IGNORE INTO biz_order (id, order_no, user_id, description, type, amount, pay_method, status, paid_at, deleted)
 VALUES (1, 'LX202611180006', 1, '专业版订阅 · 月付', 'SUBSCRIPTION', 68.000000, 'ALIPAY', 'PAID',
         DATE_SUB(NOW(), INTERVAL 1 DAY), 0),
