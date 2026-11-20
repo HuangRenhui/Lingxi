@@ -1,5 +1,7 @@
+import axios from 'axios'
 import service from '@/utils/request'
 import { getUser } from '@/utils/auth'
+import { loadAssets, loadDemoTasks, loadNotifications } from './account'
 
 /**
  * 前端 Mock 模式
@@ -231,11 +233,67 @@ function parseBody(data) {
   return data
 }
 
+/**
+ * 已接入真实后端的接口前缀。
+ *
+ * <p>Mock 模式下这些路径不再由本地适配器处理，而是放行到真实网络请求：
+ * 这样「部分模块已接后端、其余仍用演示数据」可以共存，
+ * 不必为了联调把整个应用切成真实模式、导致未改造的页面空白。</p>
+ */
+const BACKEND_PATH_PATTERNS = [
+  /^\/notifications(\/|$)/,
+  /^\/artifacts(\/|$)/,
+  /^\/agent\/tasks(\/|$)/
+]
+
+/** axios 内置适配器（浏览器下为 xhr），用于放行已接后端的请求 */
+const REAL_ADAPTER = axios.getAdapter(['xhr', 'http', 'fetch'])
+
+/**
+ * 过渡期登录桥接。
+ *
+ * <p>后端只接受「用户名 + 密码」，而本项目登录页是「邮箱 + 验证码」。
+ * 这里用演示账号静默换取真实 JWT，让已接入后端的模块能读到真实数据；
+ * 后端不可达时返回 null，调用方回退到演示令牌。
+ * 上线前应把登录页改成直接调用后端登录接口，并删除本函数。</p>
+ */
+async function bridgeBackendToken() {
+  try {
+    const base = import.meta.env.VITE_API_BASE_URL || '/api'
+    // 独立 axios 实例：不经过本文件的 adapter，避免自己拦自己
+    const response = await axios.post(`${base}/auth/login`, {
+      username: import.meta.env.VITE_DEMO_USERNAME || 'admin',
+      password: import.meta.env.VITE_DEMO_PASSWORD || 'Admin@123'
+    })
+    if (response.data?.code === 200 && response.data.data?.token) {
+      return response.data.data.token
+    }
+  } catch (error) {
+    // 后端未启动：保持演示令牌
+  }
+  return MOCK_TOKEN
+}
+
 // 用自定义 adapter 接管请求：命中 Mock 路由时直接返回本地数据，未命中时返回空数据，
 // 避免未启动后端时页面出现网络错误提示。
 if (MOCK_ENABLED) {
   // adapter 内部任何未预期异常都转换为业务错误，避免整个请求 Promise 直接 reject 造成白屏
   service.defaults.adapter = async config => {
+    const path = String(config.url || '').split('?')[0]
+    // 已接后端的路径放行到真实网络；拿不到真实数据时回退演示数据，保证页面不空白
+    if (BACKEND_PATH_PATTERNS.some(pattern => pattern.test(path))) {
+      try {
+        const response = await REAL_ADAPTER(config)
+        const code = response?.data?.code
+        // 演示令牌不是真实 JWT，后端会判 401；这不该让页面报错
+        if (code === 401 || code === 403) {
+          return await handleMockRequest(config)
+        }
+        return response
+      } catch (error) {
+        return await handleMockRequest(config)
+      }
+    }
     try {
       return await handleMockRequest(config)
     } catch (error) {
@@ -267,7 +325,19 @@ async function handleMockRequest(config) {
       if (account.password !== String(body.password || '')) {
         return fail('邮箱或密码不正确', config)
       }
-      return ok({ token: MOCK_TOKEN, user: account.user }, config)
+      const token = await bridgeBackendToken()
+      return ok({ token, user: account.user }, config)
+    }
+
+    // 已接入后端的模块在回退时的演示数据（后端不可达或演示令牌被拒时使用）
+    if (method === 'GET' && path === '/notifications') {
+      return ok(loadNotifications(), config)
+    }
+    if (method === 'GET' && path === '/artifacts') {
+      return ok(loadAssets(), config)
+    }
+    if (method === 'GET' && path === '/agent/tasks') {
+      return ok(loadDemoTasks(), config)
     }
 
     if (method === 'POST' && path === '/auth/email-code') {
