@@ -6,16 +6,26 @@ lingxi:
 spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/lingxi?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
-    username: root
-    password: root
+    # 这里是可提交的模板：只放占位符，真实地址与凭证写在 ./config/application-dev.yml（已被 .gitignore 忽略）
+    # createDatabaseIfNotExist：首次连接时自动建库，配合下方 sql.init 完成建表与种子数据
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:lingxi}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false&createDatabaseIfNotExist=true
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:}
   data:
     redis:
-      host: localhost
-      port: 6379
-      password:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
       database: 0
       timeout: 3s
+  sql:
+    init:
+      # schema.sql 全部使用 CREATE TABLE IF NOT EXISTS、data.sql 使用 INSERT IGNORE，
+      # 因此在开发环境每次启动都执行是幂等的，可保证表结构与种子数据始终就绪
+      mode: always
+      encoding: UTF-8
+      schema-locations: classpath:db/schema.sql
+      data-locations: classpath:db/data.sql
 
 logging:
   level:
