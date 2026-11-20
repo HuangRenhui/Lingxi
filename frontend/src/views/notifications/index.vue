@@ -83,20 +83,52 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { writeJson } from '@/utils/storage'
 import PageHeader from '@/components/PageHeader.vue'
 import TabStrip from '@/components/TabStrip.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import { loadNotifications, saveNotifications } from '@/mock/account'
+import {
+  deleteNotification,
+  listNotifications,
+  markAllNotificationsRead,
+  markNotificationRead
+} from '@/api/notification'
 
 const PREF_KEY = 'lingxi-notification-prefs'
 const DEFAULT_PREFS = { task: true, billing: true, system: true, marketing: false }
 
-const notifications = ref(loadNotifications())
+const notifications = ref([])
+const loading = ref(false)
 const tab = ref('all')
 const keyword = ref('')
+
+/** 后端字段是 type/readFlag，页面沿用 category/read 的既有模板 */
+function normalizeNotification(item) {
+  return {
+    id: item.id,
+    title: item.title || '',
+    content: item.content || '',
+    category: item.type || 'system',
+    read: Number(item.readFlag) === 1,
+    createdAt: item.createdAt || ''
+  }
+}
+
+async function reload() {
+  loading.value = true
+  try {
+    const list = await listNotifications({ page: 1, size: 200 })
+    notifications.value = (list || []).map(normalizeNotification)
+  } catch (error) {
+    notifications.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(reload)
 
 const tabs = [
   { key: 'all', label: '全部' },
@@ -150,10 +182,6 @@ function savePrefs() {
   ElMessage.success('通知设置已保存')
 }
 
-function persist() {
-  saveNotifications(notifications.value)
-}
-
 function iconOf(category) {
   return { task: 'Timer', billing: 'Wallet', system: 'Bell' }[category] || 'Bell'
 }
@@ -162,34 +190,52 @@ function categoryLabel(category) {
   return { task: '任务', billing: '账单', system: '系统' }[category] || category
 }
 
-function markRead(item) {
-  item.read = true
-  persist()
-}
-
-function readAll() {
-  notifications.value.forEach(item => {
+async function markRead(item) {
+  if (item.read) return
+  try {
+    await markNotificationRead(item.id)
     item.read = true
-  })
-  persist()
-  ElMessage.success('已全部标为已读')
+  } catch (error) {
+    // 拦截器已提示，保持原状态即可
+  }
 }
 
-function remove(item) {
-  notifications.value = notifications.value.filter(entry => entry.id !== item.id)
-  persist()
-  ElMessage.success('通知已删除')
+async function readAll() {
+  try {
+    await markAllNotificationsRead()
+    notifications.value.forEach(item => {
+      item.read = true
+    })
+    ElMessage.success('已全部标为已读')
+  } catch (error) {
+    // 拦截器已提示
+  }
 }
 
-function clearRead() {
-  const count = notifications.value.filter(item => item.read).length
-  if (!count) {
+async function remove(item) {
+  try {
+    await deleteNotification(item.id)
+    notifications.value = notifications.value.filter(entry => entry.id !== item.id)
+    ElMessage.success('通知已删除')
+  } catch (error) {
+    // 拦截器已提示
+  }
+}
+
+async function clearRead() {
+  const readItems = notifications.value.filter(item => item.read)
+  if (!readItems.length) {
     ElMessage.info('没有已读通知需要清除')
     return
   }
-  notifications.value = notifications.value.filter(item => !item.read)
-  persist()
-  ElMessage.success(`已清除 ${count} 条已读通知`)
+  // 后端只提供单条删除，批量清除逐条调用；并发数受通知条数限制，量级很小
+  try {
+    await Promise.all(readItems.map(item => deleteNotification(item.id)))
+    notifications.value = notifications.value.filter(item => !item.read)
+    ElMessage.success(`已清除 ${readItems.length} 条已读通知`)
+  } catch (error) {
+    await reload()
+  }
 }
 </script>
 
