@@ -76,6 +76,11 @@ public enum ResultCode {
     WALLET_NOT_FOUND(8801, "钱包账户不存在"),
     INSUFFICIENT_BALANCE(8802, "积分余额不足"),
 
+    /* 订阅：8901-8999 */
+    SUBSCRIPTION_NOT_FOUND(8901, "订阅不存在"),
+    SUBSCRIPTION_PLAN_NOT_FOUND(8902, "套餐不存在"),
+    SUBSCRIPTION_PLAN_DISABLED(8903, "套餐已停用"),
+
     /* 管理端用户：9001-9099 */
     USERNAME_TAKEN(9001, "用户名已存在"),
     CANNOT_DELETE_SELF(9002, "不能删除当前登录账号"),

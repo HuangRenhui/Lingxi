@@ -2,7 +2,7 @@
 
 English | [简体中文](./README.md)
 
-> A runnable, deployable AI creation platform: Vue 3 + Element Plus frontend (all user and admin pages, runnable on mock data alone), Spring Boot + B1-B12 backend. The backend currently ships login, token refresh/logout, B7 task-definition management, and base APIs for applications, API keys, notifications, devices, skills, connectors, artifacts, orders, and wallet; the **B7 unattended agent orchestration engine is the core direction of the upcoming milestones**.
+> A runnable, deployable AI creation platform: Vue 3 + Element Plus frontend (all user and admin pages, runnable on mock data alone), Spring Boot + B1-B12 backend. The backend currently ships login, token refresh/logout, B7 task-definition management, and base APIs for applications, API keys, notifications, devices, skills, connectors, artifacts, orders, wallet, and subscriptions; the **B7 unattended agent orchestration engine is the core direction of the upcoming milestones**.
 
 ![Java](https://img.shields.io/badge/Java-8-orange)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.18-brightgreen)
@@ -36,7 +36,7 @@ The frontend ships a built-in mock layer, so every page works locally without th
 | Scheduler and multi-round agent loop (B7) | ⬜ Planned |
 | Billing rules / payment callbacks (B3 billing, B6) | ⬜ Backend planned; frontend demo pages done |
 | Artifacts (B8) | 🟡 List / detail / create / update / delete APIs done |
-| Orders (B3), wallet (B4) | 🟡 Base APIs done; payment callbacks and balance changes pending |
+| Orders (B3), wallet (B4), subscriptions (B5) | 🟡 Base APIs done; payment callbacks and balance changes pending |
 | Usage / admin / reports / local channel (B9-B12) | ⬜ Backend planned; frontend demo pages done |
 
 Demo account: `admin / Admin@123` (initialization only; change before deployment).
@@ -237,7 +237,7 @@ Admin pages are grouped as Overview (dashboard, monitor), Users & Operations (us
 | B2 | Model gateway | Upstream models, routing, key custody, public API |
 | B3 | Billing & orders | Orders API done; pricing rules, payment callbacks, refunds pending |
 | B4 | Wallet | Account and transaction queries done |
-| B5 | Subscriptions | Plans, entitlements, cycles |
+| B5 | Subscriptions | Plans, subscribe/renew/change, auto-renew, cancel, history |
 | B6 | Payments & top-ups | Payment channels, top-ups, redeem codes |
 | B7 | Unattended agent | Scheduled tasks, multi-round loop, authorization, dual channel |
 | B8 | Artifacts | Image/video/document outputs and object storage |
@@ -269,6 +269,10 @@ Admin pages are grouped as Overview (dashboard, monitor), Users & Operations (us
 | GET / PUT / PATCH / DELETE | `/api/orders/{id}` | Order detail / update / cancel / delete |
 | GET | `/api/wallet` | Wallet account |
 | GET | `/api/wallet/transactions` | Wallet transactions (`type` filter) |
+| GET | `/api/subscriptions/plans` | Subscription plans |
+| GET / POST | `/api/subscriptions` | Current subscription / subscribe, renew or change plan |
+| PUT / DELETE | `/api/subscriptions/current` | Toggle auto-renew / cancel |
+| GET | `/api/subscriptions/history` | Subscription history |
 
 See the [API documentation](./docs/接口文档.md) for fields and examples (Chinese).
 
@@ -291,7 +295,7 @@ See the [API documentation](./docs/接口文档.md) for fields and examples (Chi
 1. **M1**: Minimal B2 model gateway; workspace chat works.
 2. **M2**: B7 scheduler and single-round execution; tasks run automatically.
 3. **M3**: B7 multi-round loop, Skills/MCP authorization, run details.
-4. **M4**: B3/B4/B6 billing, wallet, and payment loop.
+4. **M4**: B3/B4/B6 billing and payment loop (orders, wallet and subscriptions base APIs are done; payment callbacks and balance changes remain).
 5. **M5**: B12 local browser channel and device management.
 
 ## Compliance Notes

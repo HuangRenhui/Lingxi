@@ -1,6 +1,6 @@
 -- 灵犀初始化表结构（MySQL 8.0）
--- 说明：初始化阶段包含已落地模块（B1 用户、B7 任务、AI 应用、API Key、通知、设备、技能、连接器、B8 产物、B3 订单、B4 钱包）所需表。
--- 其余 B2、B5-B12 表随模块迭代补充，规划见 docs/数据库设计.md。
+-- 说明：初始化阶段包含已落地模块（B1 用户、B7 任务、AI 应用、API Key、通知、设备、技能、连接器、B8 产物、B3 订单、B4 钱包、B5 订阅）所需表。
+-- 其余 B2/B6/B9-B12 表随模块迭代补充，规划见 docs/数据库设计.md。
 
 SET NAMES utf8mb4;
 
@@ -252,3 +252,49 @@ CREATE TABLE IF NOT EXISTS wallet_transaction (
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_general_ci COMMENT = '钱包流水（只追加）';
+
+CREATE TABLE IF NOT EXISTS subscription_plan (
+    id                BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    plan_key          VARCHAR(32)    NOT NULL COMMENT '套餐标识',
+    name              VARCHAR(64)    NOT NULL COMMENT '套餐名称',
+    monthly_price     DECIMAL(18, 6) NOT NULL DEFAULT 0 COMMENT '月付价格（积分）',
+    yearly_price      DECIMAL(18, 6) NOT NULL DEFAULT 0 COMMENT '年付价格（积分）',
+    credits_per_month INT            NOT NULL DEFAULT 0 COMMENT '每周期积分',
+    tag               VARCHAR(32)             DEFAULT NULL COMMENT '角标文案',
+    features          TEXT                    NULL COMMENT '权益说明，按换行分隔',
+    enabled           TINYINT        NOT NULL DEFAULT 1 COMMENT '上架：1 是 / 0 否',
+    sort_order        INT            NOT NULL DEFAULT 0 COMMENT '排序值',
+    created_at        DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at        DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted           TINYINT        NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_subscription_plan_key (plan_key)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci COMMENT = '订阅套餐';
+
+CREATE TABLE IF NOT EXISTS user_subscription (
+    id                BIGINT      NOT NULL AUTO_INCREMENT COMMENT '主键',
+    user_id           BIGINT      NOT NULL COMMENT '订阅用户',
+    plan_key          VARCHAR(32) NOT NULL COMMENT '套餐标识快照',
+    plan_name         VARCHAR(64) NOT NULL COMMENT '套餐名称快照',
+    cycle             VARCHAR(16) NOT NULL DEFAULT 'MONTHLY' COMMENT 'MONTHLY / YEARLY',
+    status            VARCHAR(16) NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE / EXPIRED / CANCELLED',
+    -- 生效标记：ACTIVE 时为 1，失效置 NULL；MySQL 唯一索引允许多个 NULL，
+    -- 因此 (user_id, active_flag) 唯一键能在数据库层保证「每用户最多一条生效订阅」
+    active_flag       TINYINT              DEFAULT NULL COMMENT '生效标记：1 生效 / NULL 失效',
+    auto_renew        TINYINT     NOT NULL DEFAULT 1 COMMENT '自动续费：1 是 / 0 否',
+    started_at        DATETIME    NOT NULL COMMENT '本周期开始时间',
+    expires_at        DATETIME    NOT NULL COMMENT '本周期结束时间',
+    credits_per_month INT         NOT NULL DEFAULT 0 COMMENT '周期内可用积分快照',
+    credits_used      INT         NOT NULL DEFAULT 0 COMMENT '周期内已用积分',
+    created_at        DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at        DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted           TINYINT     NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_user_subscription_active (user_id, active_flag),
+    KEY idx_user_subscription_user (user_id, status, deleted),
+    CONSTRAINT fk_user_subscription_user FOREIGN KEY (user_id) REFERENCES sys_user (id)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci COMMENT = '用户订阅与历史';

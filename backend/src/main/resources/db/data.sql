@@ -61,6 +61,20 @@ VALUES (1, 1, 'CONSUME', -2.100000, 128.600000, 'Kling · 视频生成', DATE_SU
        (4, 1, 'REWARD', 20.000000, 109.470000, '邀请好友注册奖励', DATE_SUB(NOW(), INTERVAL 2 DAY)),
        (5, 1, 'REFUND', 4.200000, 90.030000, 'Sora 任务失败自动退回', DATE_SUB(NOW(), INTERVAL 5 DAY));
 
+INSERT IGNORE INTO subscription_plan (id, plan_key, name, monthly_price, yearly_price, credits_per_month,
+                                      tag, features, enabled, sort_order, deleted)
+VALUES (1, 'free', '体验版', 0, 0, 200, NULL,
+        '每月 200 积分\n全部对话应用\n基础图片生成\n任务最多保留 7 天\n社区支持', 1, 1, 0),
+       (2, 'pro', '专业版', 68, 680, 3000, '最受欢迎',
+        '每月 3000 积分\n全部对话与创作工具\n视频生成 4K 输出\n并行任务 5 个\n定时任务保留 90 天\n优先客服支持', 1, 2, 0),
+       (3, 'ultra', '旗舰版', 168, 1680, 12000, NULL,
+        '每月 12000 积分\n全部模型与最高档位\n并行任务 20 个\n任务与产物永久保留\n自定义 Skills 与连接器\n专属技术支持', 1, 3, 0);
+
+INSERT IGNORE INTO user_subscription (id, user_id, plan_key, plan_name, cycle, status, active_flag, auto_renew,
+                                      started_at, expires_at, credits_per_month, credits_used, deleted)
+VALUES (1, 1, 'pro', '专业版', 'MONTHLY', 'ACTIVE', 1, 1,
+        DATE_SUB(NOW(), INTERVAL 12 DAY), DATE_ADD(NOW(), INTERVAL 18 DAY), 3000, 1284, 0);
+
 INSERT IGNORE INTO biz_order (id, order_no, user_id, description, type, amount, pay_method, status, paid_at, deleted)
 VALUES (1, 'LX202611180006', 1, '专业版订阅 · 月付', 'SUBSCRIPTION', 68.000000, 'ALIPAY', 'PAID',
         DATE_SUB(NOW(), INTERVAL 1 DAY), 0),
