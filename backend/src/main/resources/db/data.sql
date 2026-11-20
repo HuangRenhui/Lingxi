@@ -13,3 +13,7 @@ VALUES (1, 1, '每日 AI 资讯汇总',
        (2, 1, '每周竞品观察',
         '整理本周竞品动态并输出要点，重点关注产品更新与定价变化。',
         'claude-3-5-sonnet', 'LOCAL', 'Asia/Shanghai', 'WEEKLY', '18:00', '5', 0, 30, 'DISABLED', 0, 0);
+
+INSERT IGNORE INTO ai_application (id, user_id, name, description, app_type, status, deleted)
+VALUES (1, 1, '商品海报工厂', '上传商品图，批量生成营销海报与详情页配图。', 'IMAGE', 1, 0),
+       (2, 1, '短视频脚本助手', '根据主题生成分镜、口播文案与发布标题。', 'VIDEO', 1, 0);

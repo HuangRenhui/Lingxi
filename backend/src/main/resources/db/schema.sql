@@ -1,5 +1,5 @@
 -- 灵犀初始化表结构（MySQL 8.0）
--- 说明：初始化阶段仅包含已落地模块（B1 用户、B7 任务定义/运行实例）所需表。
+-- 说明：初始化阶段包含已落地模块（B1 用户、B7 任务定义/运行实例、AI 应用）所需表。
 -- 其余 B2-B12 表随模块迭代补充，规划见 docs/数据库设计.md。
 
 SET NAMES utf8mb4;
@@ -69,3 +69,19 @@ CREATE TABLE IF NOT EXISTS ai_task_run (
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_general_ci COMMENT = '任务运行实例';
+
+CREATE TABLE IF NOT EXISTS ai_application (
+    id          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    user_id     BIGINT       NOT NULL COMMENT '属主用户',
+    name        VARCHAR(64)  NOT NULL COMMENT '应用名称',
+    description VARCHAR(255)          DEFAULT NULL COMMENT '应用描述',
+    app_type    VARCHAR(16)  NOT NULL DEFAULT 'GENERAL' COMMENT 'GENERAL / IMAGE / VIDEO / AUDIO',
+    status      TINYINT      NOT NULL DEFAULT 1 COMMENT '状态：1 启用 / 0 禁用',
+    created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted     TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    PRIMARY KEY (id),
+    KEY idx_ai_application_user (user_id, deleted)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci COMMENT = 'AI 应用';

@@ -31,7 +31,11 @@ public enum ResultCode {
     TASK_NOT_OWNED(7002, "无权操作该任务"),
     TASK_STATUS_INVALID(7003, "任务状态仅支持 ENABLED / DISABLED"),
     TASK_SCHEDULE_INVALID(7004, "任务调度配置不合法"),
-    TASK_CONCURRENT_MODIFIED(7005, "任务已被其他操作修改，请刷新后重试");
+    TASK_CONCURRENT_MODIFIED(7005, "任务已被其他操作修改，请刷新后重试"),
+
+    /* AI 应用：8001-8099 */
+    APPLICATION_NOT_FOUND(8001, "应用不存在"),
+    APPLICATION_NOT_OWNED(8002, "无权操作该应用");
 
     private final int code;
     private final String message;
