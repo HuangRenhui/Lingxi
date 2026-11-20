@@ -17,7 +17,8 @@ const KEYS = {
   moderation: 'lingxi-admin-moderation',
   sensitiveWords: 'lingxi-admin-sensitive-words',
   billingRules: 'lingxi-admin-billing-rules',
-  operationLogs: 'lingxi-admin-operation-logs'
+  operationLogs: 'lingxi-admin-operation-logs',
+  monitorQueue: 'lingxi-admin-monitor-queue'
 }
 
 function stamp(daysAgo, hour = 10, minute = 0) {
@@ -372,27 +373,51 @@ export function saveSensitiveWords(list) {
 
 /* ---------- 计费规则 ---------- */
 
+/**
+ * 计费规则种子。
+ *
+ * 成本口径：costIn / costOut / cost 为「上游成本折合积分」，与售价同单位，
+ * 毛利率 = 1 - 成本 / (售价 × 倍率)，无需引入汇率即可判断是否亏本。
+ * 演示数值仅供结构参考，接入后端后应改为「美元成本 + 汇率 + 生效版本」。
+ */
 const BILLING_SEED = [
-  { id: 'br-1', category: '对话', target: 'ChatGPT', model: 'GPT-6 Astra', unit: '1K tokens', price: 0.02, multiplier: 1, enabled: true, updatedAt: stamp(6, 11, 0) },
-  { id: 'br-2', category: '对话', target: 'ChatGPT', model: 'GPT-5.6 Luna', unit: '1K tokens', price: 0.004, multiplier: 1, enabled: true, updatedAt: stamp(6, 11, 0) },
-  { id: 'br-3', category: '对话', target: 'Claude', model: 'Claude Opus 5.5', unit: '1K tokens', price: 0.03, multiplier: 1.2, enabled: true, updatedAt: stamp(4, 9, 30) },
-  { id: 'br-4', category: '对话', target: 'DeepSeek', model: 'DeepSeek V4 Pro', unit: '1K tokens', price: 0.002, multiplier: 1, enabled: true, updatedAt: stamp(4, 9, 30) },
-  { id: 'br-5', category: '图片', target: 'Nano Banana', model: 'nano-banana', unit: '张', price: 0.14, multiplier: 1, enabled: true, updatedAt: stamp(3, 14, 0) },
-  { id: 'br-6', category: '图片', target: 'OpenAI Image', model: 'gpt-image-2', unit: '张', price: 0.19, multiplier: 1, enabled: true, updatedAt: stamp(3, 14, 0) },
-  { id: 'br-7', category: '图片', target: 'SeeDream', model: 'doubao-seedream-5.0-lite', unit: '张', price: 0.37, multiplier: 1, enabled: true, updatedAt: stamp(3, 14, 0) },
-  { id: 'br-8', category: '视频', target: 'SeeDance', model: 'doubao-seedance-2.0', unit: '5s', price: 8.4, multiplier: 1, enabled: true, updatedAt: stamp(2, 10, 20) },
-  { id: 'br-9', category: '视频', target: 'Kling', model: 'v2.5-Turbo', unit: '5s', price: 2.1, multiplier: 1, enabled: true, updatedAt: stamp(2, 10, 20) },
-  { id: 'br-10', category: '视频', target: 'Sora', model: 'Sora 2', unit: '10s', price: 4.2, multiplier: 1, enabled: false, updatedAt: stamp(9, 16, 0) },
-  { id: 'br-11', category: '音乐', target: 'Suno', model: 'v6', unit: '首', price: 0.56, multiplier: 1, enabled: true, updatedAt: stamp(5, 15, 40) },
-  { id: 'br-12', category: '音乐', target: 'Producer', model: 'FUZZ-2.0 Pro', unit: '首', price: 0.58, multiplier: 1, enabled: true, updatedAt: stamp(5, 15, 40) }
+  { id: 'br-1', category: '对话', target: 'ChatGPT', model: 'GPT-6 Astra', unit: '1K tokens', priceIn: 0.02, priceOut: 0.08, priceCachedIn: 0.005, costIn: 0.012, costOut: 0.052, multiplier: 1, enabled: true, updatedAt: stamp(6, 11, 0) },
+  { id: 'br-2', category: '对话', target: 'ChatGPT', model: 'GPT-5.6 Luna', unit: '1K tokens', priceIn: 0.004, priceOut: 0.016, priceCachedIn: 0.001, costIn: 0.0024, costOut: 0.0106, multiplier: 1, enabled: true, updatedAt: stamp(6, 11, 0) },
+  { id: 'br-3', category: '对话', target: 'Claude', model: 'Claude Opus 5.5', unit: '1K tokens', priceIn: 0.03, priceOut: 0.12, priceCachedIn: 0.0075, costIn: 0.018, costOut: 0.075, multiplier: 1.2, enabled: true, updatedAt: stamp(4, 9, 30) },
+  { id: 'br-4', category: '对话', target: 'DeepSeek', model: 'DeepSeek V4 Pro', unit: '1K tokens', priceIn: 0.002, priceOut: 0.008, priceCachedIn: 0.0005, costIn: 0.0012, costOut: 0.0052, multiplier: 1, enabled: true, updatedAt: stamp(4, 9, 30) },
+  { id: 'br-5', category: '图片', target: 'Nano Banana', model: 'nano-banana', unit: '张', price: 0.14, cost: 0.092, multiplier: 1, enabled: true, updatedAt: stamp(3, 14, 0) },
+  { id: 'br-6', category: '图片', target: 'OpenAI Image', model: 'gpt-image-2', unit: '张', price: 0.19, cost: 0.126, multiplier: 1, enabled: true, updatedAt: stamp(3, 14, 0) },
+  { id: 'br-7', category: '图片', target: 'SeeDream', model: 'doubao-seedream-5.0-lite', unit: '张', price: 0.37, cost: 0.255, multiplier: 1, enabled: true, updatedAt: stamp(3, 14, 0) },
+  { id: 'br-8', category: '视频', target: 'SeeDance', model: 'doubao-seedance-2.0', unit: '5s', price: 8.4, cost: 6.05, multiplier: 1, enabled: true, updatedAt: stamp(2, 10, 20) },
+  { id: 'br-9', category: '视频', target: 'Kling', model: 'v2.5-Turbo', unit: '5s', price: 2.1, cost: 1.42, multiplier: 1, enabled: true, updatedAt: stamp(2, 10, 20) },
+  { id: 'br-10', category: '视频', target: 'Sora', model: 'Sora 2', unit: '10s', price: 4.2, cost: 3.36, multiplier: 1, enabled: false, updatedAt: stamp(9, 16, 0) },
+  { id: 'br-11', category: '音乐', target: 'Suno', model: 'v6', unit: '首', price: 0.56, cost: 0.38, multiplier: 1, enabled: true, updatedAt: stamp(5, 15, 40) },
+  { id: 'br-12', category: '音乐', target: 'Producer', model: 'FUZZ-2.0 Pro', unit: '首', price: 0.58, cost: 0.4, multiplier: 1, enabled: true, updatedAt: stamp(5, 15, 40) }
 ]
 
+/** 兼容旧缓存：补齐成本与输入/输出分档字段，避免历史 localStorage 出现 undefined。 */
+function normalizeBillingRule(item) {
+  const isToken = item.category === '对话'
+  const legacyPrice = Number(item.price) || 0
+  return {
+    ...item,
+    price: Number(item.price) || 0,
+    priceIn: Number(item.priceIn ?? (isToken ? legacyPrice : 0)),
+    priceOut: Number(item.priceOut ?? (isToken ? legacyPrice : 0)),
+    priceCachedIn: Number(item.priceCachedIn ?? 0),
+    costIn: Number(item.costIn ?? 0),
+    costOut: Number(item.costOut ?? 0),
+    cost: Number(item.cost ?? 0),
+    multiplier: Number(item.multiplier) || 1
+  }
+}
+
 export function loadBillingRules() {
-  return seed(KEYS.billingRules, BILLING_SEED)
+  return seed(KEYS.billingRules, BILLING_SEED).map(normalizeBillingRule)
 }
 
 export function saveBillingRules(list) {
-  write(KEYS.billingRules, list)
+  write(KEYS.billingRules, list.map(normalizeBillingRule))
 }
 
 /* ---------- 操作日志 ---------- */
@@ -422,13 +447,24 @@ export function saveOperationLogs(list) {
 
 /* ---------- 实时监控 ---------- */
 
-export const monitorQueue = [
+const MONITOR_SEED = [
   { id: 'q-1', name: '每日资讯简报', user: '陈屿', round: '3 / 6', status: 'RUNNING', startedAt: stamp(0, 20, 10), duration: '1m 42s', location: '云端' },
   { id: 'q-2', name: '竞品动态跟踪', user: '林一诺', round: '1 / 4', status: 'RUNNING', startedAt: stamp(0, 20, 18), duration: '0m 36s', location: '本机' },
   { id: 'q-3', name: '数据日报', user: '周墨', round: '0 / 3', status: 'PENDING', startedAt: '', duration: '—', location: '云端' },
   { id: 'q-4', name: '社媒内容排期', user: '苏晚', round: '6 / 6', status: 'SUCCESS', startedAt: stamp(0, 19, 2), duration: '4m 08s', location: '云端' },
   { id: 'q-5', name: '长文摘要', user: '何川', round: '2 / 5', status: 'FAILED', startedAt: stamp(0, 18, 44), duration: '2m 12s', location: '本机' }
 ]
+
+// 兼容旧的静态引用
+export const monitorQueue = MONITOR_SEED
+
+export function loadMonitorQueue() {
+  return seed(KEYS.monitorQueue, MONITOR_SEED)
+}
+
+export function saveMonitorQueue(list) {
+  write(KEYS.monitorQueue, list)
+}
 
 export const channelHealth = [
   { name: 'OpenAI', requests: 12840, successRate: 99.6, latency: 820, status: 'HEALTHY', note: '主通道' },
