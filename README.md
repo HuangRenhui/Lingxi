@@ -281,6 +281,10 @@ lingxi/
 | PUT | `/api/agent/tasks/{id}` | 更新任务 |
 | PATCH | `/api/agent/tasks/{id}/status` | 启停任务 |
 | DELETE | `/api/agent/tasks/{id}` | 删除任务 |
+| GET / POST | `/api/applications` | AI 应用列表 / 新建 |
+| GET / PUT / DELETE | `/api/applications/{id}` | 应用详情 / 更新 / 删除 |
+| GET / POST | `/api/api-keys` | API Key 列表 / 创建（明文仅创建时返回） |
+| PUT / DELETE | `/api/api-keys/{id}` | 重命名/启停 / 删除 |
 
 完整字段与示例见 [接口文档](./docs/接口文档.md)。
 

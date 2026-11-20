@@ -35,21 +35,9 @@ public enum ResultCode {
 
     /* AI 应用：8001-8099 */
     APPLICATION_NOT_FOUND(8001, "应用不存在"),
-    APPLICATION_NOT_OWNED(8002, "无权操作该应用");
+    APPLICATION_NOT_OWNED(8002, "无权操作该应用"),
 
-    private final int code;
-    private final String message;
-
-    ResultCode(int code, String message) {
-        this.code = code;
-        this.message = message;
-    }
-
-    public int getCode() {
-        return code;
-    }
-
-    public String getMessage() {
-        return message;
-    }
+/* API Key：8101-8199 */
+    API_KEY_NOT_FOUND(8101, "密钥不存在"),
+    API_KEY_NOT_OWNED(8102, "无权操作该密钥");
 }
