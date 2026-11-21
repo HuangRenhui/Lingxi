@@ -7,6 +7,17 @@
       </el-button>
     </PageHeader>
 
+    <el-alert
+      v-if="!isDev"
+      class="demo-note"
+      style="margin-bottom: 16px"
+      type="info"
+      :closable="false"
+      show-icon
+      title="当前展示的是演示套餐数据"
+      description="真实订阅与套餐变更接口尚未接入；订阅、续费等写操作在生产环境已禁用。"
+    />
+
     <section class="current-grid">
       <article class="panel current-card">
         <div class="current-top">
@@ -153,6 +164,7 @@ import {
 import { chargeCredits, loadPlans, refundCredits } from '@/mock/platform'
 
 const router = useRouter()
+const isDev = import.meta.env.DEV
 const subscription = ref(loadSubscription())
 const history = ref(loadPlanHistory())
 const plans = ref(loadPlans())
@@ -218,12 +230,21 @@ async function payForSubscription(price, purpose) {
 }
 
 function toggleAutoRenew(value) {
+  if (!import.meta.env.DEV) {
+    subscription.value.autoRenew = !value
+    ElMessage.info('订阅管理暂未接入后端')
+    return
+  }
   subscription.value.autoRenew = value
   persist()
   ElMessage.success(value ? '已开启自动续费' : '已关闭自动续费')
 }
 
 async function renew() {
+  if (!import.meta.env.DEV) {
+    ElMessage.info('订阅续费暂未接入后端')
+    return
+  }
   const plan = currentPlan.value
   const price = plan[cycle.value] || plan.monthly
   try {
@@ -276,6 +297,10 @@ async function renew() {
 }
 
 async function choosePlan(plan) {
+  if (!import.meta.env.DEV) {
+    ElMessage.info('套餐切换暂未接入后端')
+    return
+  }
   const price = plan[cycle.value] || plan.monthly
   try {
     await ElMessageBox.confirm(

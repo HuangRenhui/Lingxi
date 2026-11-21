@@ -25,4 +25,11 @@ public class SubscriptionCreateRequest {
     @Pattern(regexp = "MONTHLY|YEARLY", message = "计费周期仅支持 MONTHLY/YEARLY")
     @Schema(description = "计费周期", example = "MONTHLY")
     private String cycle;
+
+    /**
+     * 是否为续费：true 表示同套餐仍在有效期内时按当前周期叠加时长并扣费；
+     * 不传/false 时同套餐重复请求按幂等处理，直接返回现有订阅。
+     */
+    @Schema(description = "是否续费", example = "false")
+    private Boolean renew;
 }

@@ -96,9 +96,27 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         LocalDateTime now = LocalDateTime.now();
         UserSubscription current = findActiveSubscription();
 
-        // 同一套餐仍在有效期内：视为重复提交（连点/重试），直接返回现有订阅
+        // 同一套餐仍在有效期内
         if (current != null && !isExpired(current) && plan.getPlanKey().equals(current.getPlanKey())) {
-            return toVO(current);
+            // 未显式声明续费：视为重复提交（连点/重试），直接返回现有订阅
+            if (!Boolean.TRUE.equals(request.getRenew())) {
+                return toVO(current);
+            }
+            // 续费：正常扣费并在原到期时间上叠加一个周期，不丢失剩余时长
+            if (price.compareTo(BigDecimal.ZERO) > 0) {
+                chargeForSubscription(userId, plan, cycle, price, now);
+            }
+            LocalDateTime base = current.getExpiresAt() != null && current.getExpiresAt().isAfter(now)
+                    ? current.getExpiresAt() : now;
+            LocalDateTime nextExpires = "YEARLY".equals(cycle) ? base.plusYears(1) : base.plusMonths(1);
+            userSubscriptionMapper.update(null, new LambdaUpdateWrapper<UserSubscription>()
+                    .eq(UserSubscription::getId, current.getId())
+                    .eq(UserSubscription::getStatus, "ACTIVE")
+                    .set(UserSubscription::getExpiresAt, nextExpires)
+                    .set(UserSubscription::getCycle, cycle)
+                    .set(UserSubscription::getCreditsPerMonth,
+                            plan.getCreditsPerMonth() == null ? 0 : plan.getCreditsPerMonth()));
+            return toVO(userSubscriptionMapper.selectById(current.getId()));
         }
         // 换套餐或已到期：旧记录统一失效，历史留痕
         if (current != null) {
