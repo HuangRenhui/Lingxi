@@ -1,6 +1,8 @@
 package com.lingxi.controller;
 
 import com.lingxi.common.Result;
+import com.lingxi.dto.NotificationCreateRequest;
+import com.lingxi.dto.NotificationUpdateRequest;
 import com.lingxi.service.NotificationService;
 import com.lingxi.vo.NotificationVO;
 import io.swagger.v3.oas.annotations.Operation;
@@ -9,11 +11,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.validation.Valid;
 import java.util.List;
 
 /**
@@ -38,6 +43,34 @@ public class NotificationController {
                                              @RequestParam(defaultValue = "20") int size,
                                              @RequestParam(defaultValue = "false") boolean unreadOnly) {
         return Result.success(notificationService.listMine(page, size, unreadOnly));
+    }
+
+    /**
+     * 通知详情。
+     */
+    @GetMapping("/{id}")
+    @Operation(summary = "通知详情")
+    public Result<NotificationVO> get(@PathVariable Long id) {
+        return Result.success(notificationService.get(id));
+    }
+
+    /**
+     * 新建通知（接收人为当前用户）。
+     */
+    @PostMapping
+    @Operation(summary = "新建通知")
+    public Result<NotificationVO> create(@Valid @RequestBody NotificationCreateRequest request) {
+        return Result.success(notificationService.create(request));
+    }
+
+    /**
+     * 更新通知内容或已读状态。
+     */
+    @PutMapping("/{id}")
+    @Operation(summary = "更新通知")
+    public Result<NotificationVO> update(@PathVariable Long id,
+                                         @Valid @RequestBody NotificationUpdateRequest request) {
+        return Result.success(notificationService.update(id, request));
     }
 
     /**

@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lingxi.common.BusinessException;
 import com.lingxi.common.ResultCode;
+import com.lingxi.dto.NotificationCreateRequest;
+import com.lingxi.dto.NotificationUpdateRequest;
 import com.lingxi.entity.Notification;
 import com.lingxi.mapper.NotificationMapper;
 import com.lingxi.security.SecurityUtils;
@@ -41,6 +43,49 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
+    public NotificationVO get(Long id) {
+        return toVO(getOwnedNotification(id));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public NotificationVO create(NotificationCreateRequest request) {
+        Notification notification = new Notification();
+        // 接收人只取自登录态：通知接口不允许给他人投递
+        notification.setUserId(SecurityUtils.getUserId());
+        notification.setTitle(request.getTitle().trim());
+        notification.setContent(request.getContent());
+        notification.setType(request.getType() == null ? "SYSTEM" : request.getType());
+        notification.setReadFlag(0);
+        notificationMapper.insert(notification);
+        return toVO(notificationMapper.selectById(notification.getId()));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public NotificationVO update(Long id, NotificationUpdateRequest request) {
+        Notification notification = getOwnedNotification(id);
+        if (request.getTitle() != null) {
+            String title = request.getTitle().trim();
+            if (title.isEmpty()) {
+                throw new BusinessException(ResultCode.PARAM_ERROR);
+            }
+            notification.setTitle(title);
+        }
+        if (request.getContent() != null) {
+            notification.setContent(request.getContent());
+        }
+        if (request.getType() != null) {
+            notification.setType(request.getType());
+        }
+        if (request.getReadFlag() != null) {
+            notification.setReadFlag(request.getReadFlag());
+        }
+        notificationMapper.updateById(notification);
+        return toVO(notificationMapper.selectById(id));
+    }
+
+    @Override
     public long unreadCount() {
         return notificationMapper.selectCount(new LambdaQueryWrapper<Notification>()
                 .eq(Notification::getUserId, SecurityUtils.getUserId())
@@ -54,8 +99,11 @@ public class NotificationServiceImpl implements NotificationService {
         if (Integer.valueOf(1).equals(notification.getReadFlag())) {
             return;
         }
-        notification.setReadFlag(1);
-        notificationMapper.updateById(notification);
+        // 只更新已读标记，避免整实体回写覆盖并发的标题/正文修改
+        notificationMapper.update(null, new LambdaUpdateWrapper<Notification>()
+                .eq(Notification::getId, id)
+                .eq(Notification::getUserId, notification.getUserId())
+                .set(Notification::getReadFlag, 1));
     }
 
     @Override

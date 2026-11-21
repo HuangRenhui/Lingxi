@@ -86,6 +86,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { writeJson } from '@/utils/storage'
+import { fetchAllPages } from '@/utils/pagination'
 import PageHeader from '@/components/PageHeader.vue'
 import TabStrip from '@/components/TabStrip.vue'
 import EmptyState from '@/components/EmptyState.vue'
@@ -106,12 +107,14 @@ const keyword = ref('')
 
 /** 后端字段是 type/readFlag，页面沿用 category/read 的既有模板 */
 function normalizeNotification(item) {
+  // 后端返回大写 type + readFlag，Mock 旧数据是 category + read，两种都兼容
+  const rawCategory = item.category || item.type || 'system'
   return {
     id: item.id,
     title: item.title || '',
     content: item.content || '',
-    category: item.type || 'system',
-    read: Number(item.readFlag) === 1,
+    category: String(rawCategory).toLowerCase(),
+    read: item.read === true || Number(item.readFlag) === 1,
     createdAt: item.createdAt || ''
   }
 }
@@ -119,8 +122,8 @@ function normalizeNotification(item) {
 async function reload() {
   loading.value = true
   try {
-    const list = await listNotifications({ page: 1, size: 200 })
-    notifications.value = (list || []).map(normalizeNotification)
+    const result = await fetchAllPages(params => listNotifications(params))
+    notifications.value = (result ? result.list : []).map(normalizeNotification)
   } catch (error) {
     notifications.value = []
   } finally {
