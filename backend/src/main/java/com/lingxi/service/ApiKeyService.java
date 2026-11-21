@@ -17,6 +17,11 @@ public interface ApiKeyService {
     List<ApiKeyVO> listMine(int page, int size);
 
     /**
+     * 查询密钥详情，仅返回前缀，不含明文。
+     */
+    ApiKeyVO get(Long id);
+
+    /**
      * 创建密钥，返回的明文只出现这一次。
      */
     ApiKeyVO create(ApiKeyCreateRequest request);

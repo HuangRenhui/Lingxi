@@ -48,6 +48,11 @@ public class ApiKeyServiceImpl implements ApiKeyService {
     }
 
     @Override
+    public ApiKeyVO get(Long id) {
+        return toVO(getOwnedKey(id));
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public ApiKeyVO create(ApiKeyCreateRequest request) {
         String plainKey = generateKey();

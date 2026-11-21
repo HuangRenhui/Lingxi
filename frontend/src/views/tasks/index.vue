@@ -273,6 +273,7 @@ import TabStrip from '@/components/TabStrip.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import TablePager from '@/components/TablePager.vue'
 import { createTask, deleteTask, listTasks, updateTask, updateTaskStatus } from '@/api/task'
+import { fetchAllPages } from '@/utils/pagination'
 import {
   loadDemoTasks,
   loadTaskRuns,
@@ -457,20 +458,33 @@ async function loadTasks() {
   loading.value = true
   loadError.value = ''
   try {
-    const list = await listTasks()
+    const result = await fetchAllPages(params => listTasks(params))
     // 接口异常时可能返回 null（未命中的 Mock 路由），直接赋值会让表格渲染报错
-    if (!Array.isArray(list)) {
-      loadError.value = '任务数据格式异常，已切换到本地演示数据'
-      demoMode.value = true
-      tasks.value = loadDemoTasks()
+    if (!result) {
+      demoMode.value = false
+      tasks.value = []
+      loadError.value = import.meta.env.DEV
+        ? '任务数据格式异常，已切换到本地演示数据'
+        : '任务数据格式异常，请稍后重试'
+      if (import.meta.env.DEV) {
+        demoMode.value = true
+        tasks.value = loadDemoTasks()
+      }
       return
     }
-    tasks.value = list
+    tasks.value = result.list
     demoMode.value = false
   } catch (error) {
-    // 后端未启动时退回本地演示任务，保证前端可独立体验（顶部已有演示提示条）
-    demoMode.value = true
-    tasks.value = loadDemoTasks()
+    // 只有开发环境允许回退演示数据；生产必须暴露错误，不能假装加载成功
+    demoMode.value = false
+    tasks.value = []
+    loadError.value = import.meta.env.DEV
+      ? '后端不可用，已切换到本地演示任务'
+      : '无法加载任务，请检查网络或稍后重试'
+    if (import.meta.env.DEV) {
+      demoMode.value = true
+      tasks.value = loadDemoTasks()
+    }
   } finally {
     loading.value = false
   }
@@ -632,6 +646,11 @@ function normalizeInterruptedRuns() {
 }
 
 function runNow(row) {
+  // 后端尚未提供手动触发/调度执行接口，生产环境不能只在本地模拟运行和扣费
+  if (!import.meta.env.DEV) {
+    ElMessage.info('定时任务执行器暂未接入后端')
+    return
+  }
   if (runningTaskIds.has(row.id)) {
     ElMessage.warning('该任务正在运行中，请等待本次运行结束')
     return

@@ -8,6 +8,7 @@ import com.lingxi.entity.AiTask;
 import com.lingxi.mapper.AiTaskMapper;
 import com.lingxi.security.SecurityUtils;
 import com.lingxi.service.AgentTaskService;
+import com.lingxi.service.SensitiveWordService;
 import com.lingxi.vo.TaskVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -41,9 +42,11 @@ public class AgentTaskServiceImpl implements AgentTaskService {
             new HashSet<>(Arrays.asList("INTERVAL", "HOURLY", "DAILY", "WEEKLY", "CRON"));
 
     private final AiTaskMapper aiTaskMapper;
+    private final SensitiveWordService sensitiveWordService;
 
-    public AgentTaskServiceImpl(AiTaskMapper aiTaskMapper) {
+    public AgentTaskServiceImpl(AiTaskMapper aiTaskMapper, SensitiveWordService sensitiveWordService) {
         this.aiTaskMapper = aiTaskMapper;
+        this.sensitiveWordService = sensitiveWordService;
     }
 
     @Override
@@ -61,6 +64,11 @@ public class AgentTaskServiceImpl implements AgentTaskService {
                         .orderByDesc(AiTask::getId));
         // 响应结构保持为 List，只返回当前页记录。
         return result.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+    }
+
+    @Override
+    public TaskVO get(Long id) {
+        return toVO(getOwnedTask(id));
     }
 
     @Override
@@ -88,6 +96,7 @@ public class AgentTaskServiceImpl implements AgentTaskService {
         task.setDeleted(0);
 
         validate(task);
+        sensitiveWordService.checkContent(task.getName(), task.getPromptTemplate());
         aiTaskMapper.insert(task);
         return toVO(aiTaskMapper.selectById(task.getId()));
     }
@@ -99,52 +108,69 @@ public class AgentTaskServiceImpl implements AgentTaskService {
         AiTask task = getOwnedTask(id);
         // 记录读取时的状态，作为条件更新的乐观校验条件，避免并发覆盖他人的状态切换。
         String expectedStatus = task.getStatus();
-        // 只覆盖请求中非 null 的字段，null 表示“不修改”，
-        // 这样前端可以只提交变更项，不必回传完整任务定义。
+        // 只把请求中显式传入的字段写进 SET 子句。整实体 update 会把读取时的
+        // runCount/lastRunAt/nextRunAt/lastOutput 一并写回，调度器更新运行态后会丢数据。
+        LambdaUpdateWrapper<AiTask> update = new LambdaUpdateWrapper<AiTask>()
+                .eq(AiTask::getId, id)
+                .eq(AiTask::getUserId, SecurityUtils.getUserId())
+                .eq(AiTask::getStatus, expectedStatus);
         if (request.getName() != null) {
             task.setName(request.getName().trim());
+            update.set(AiTask::getName, task.getName());
         }
         if (request.getPromptTemplate() != null) {
             task.setPromptTemplate(request.getPromptTemplate());
+            update.set(AiTask::getPromptTemplate, task.getPromptTemplate());
         }
         if (request.getModel() != null) {
             task.setModel(request.getModel());
+            update.set(AiTask::getModel, task.getModel());
         }
         if (request.getRunLocation() != null) {
             task.setRunLocation(request.getRunLocation());
+            update.set(AiTask::getRunLocation, task.getRunLocation());
         }
         if (request.getTimezone() != null) {
             task.setTimezone(request.getTimezone());
+            update.set(AiTask::getTimezone, task.getTimezone());
         }
         if (request.getScheduleType() != null) {
             task.setScheduleType(request.getScheduleType());
+            update.set(AiTask::getScheduleType, task.getScheduleType());
         }
         if (request.getCronExpr() != null) {
             task.setCronExpr(request.getCronExpr());
+            update.set(AiTask::getCronExpr, task.getCronExpr());
         }
         if (request.getIntervalMinutes() != null) {
             task.setIntervalMinutes(request.getIntervalMinutes());
+            update.set(AiTask::getIntervalMinutes, task.getIntervalMinutes());
         }
         if (request.getExecuteTime() != null) {
             task.setExecuteTime(request.getExecuteTime());
+            update.set(AiTask::getExecuteTime, task.getExecuteTime());
         }
         if (request.getWeekDays() != null) {
             task.setWeekDays(request.getWeekDays());
+            update.set(AiTask::getWeekDays, task.getWeekDays());
         }
         if (request.getJitterSeconds() != null) {
             task.setJitterSeconds(request.getJitterSeconds());
+            update.set(AiTask::getJitterSeconds, task.getJitterSeconds());
         }
         if (request.getMaxRounds() != null) {
             task.setMaxRounds(request.getMaxRounds());
+            update.set(AiTask::getMaxRounds, task.getMaxRounds());
         }
 
         validate(task);
+        // 只校验本次提交的文本字段，避免状态/调度变更被历史提示词误拦截
+        sensitiveWordService.checkContent(
+                request.getName() == null ? null : task.getName(),
+                request.getPromptTemplate() == null ? null : task.getPromptTemplate());
         // 条件更新：仅在任务仍处于读取时的状态才允许写入，影响行数为 0 说明期间已被其他请求修改。
-        task.setUpdatedAt(LocalDateTime.now());
-        int affected = aiTaskMapper.update(task, new LambdaUpdateWrapper<AiTask>()
-                .eq(AiTask::getId, id)
-                .eq(AiTask::getUserId, SecurityUtils.getUserId())
-                .eq(AiTask::getStatus, expectedStatus));
+        update.set(AiTask::getUpdatedAt, LocalDateTime.now());
+        int affected = aiTaskMapper.update(null, update);
         if (affected == 0) {
             throw new BusinessException(ResultCode.TASK_CONCURRENT_MODIFIED);
         }
@@ -172,12 +198,13 @@ public class AgentTaskServiceImpl implements AgentTaskService {
         if (status.equals(expectedStatus)) {
             return toVO(task);
         }
-        task.setStatus(status);
-        task.setUpdatedAt(LocalDateTime.now());
-        int affected = aiTaskMapper.update(task, new LambdaUpdateWrapper<AiTask>()
+        int affected = aiTaskMapper.update(null, new LambdaUpdateWrapper<AiTask>()
                 .eq(AiTask::getId, id)
                 .eq(AiTask::getUserId, SecurityUtils.getUserId())
-                .eq(AiTask::getStatus, expectedStatus));
+                .eq(AiTask::getStatus, expectedStatus)
+                // 只更新状态与更新时间，保留调度器维护的运行字段
+                .set(AiTask::getStatus, status)
+                .set(AiTask::getUpdatedAt, LocalDateTime.now()));
         if (affected == 0) {
             throw new BusinessException(ResultCode.TASK_CONCURRENT_MODIFIED);
         }

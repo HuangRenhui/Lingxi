@@ -43,6 +43,15 @@ public class ApiKeyController {
     }
 
     /**
+     * 密钥详情，仅返回前缀。
+     */
+    @GetMapping("/{id}")
+    @Operation(summary = "密钥详情")
+    public Result<ApiKeyVO> get(@PathVariable Long id) {
+        return Result.success(apiKeyService.get(id));
+    }
+
+    /**
      * 创建密钥，明文仅在本次响应中返回。
      */
     @PostMapping

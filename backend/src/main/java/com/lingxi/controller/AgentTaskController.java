@@ -43,6 +43,12 @@ public class AgentTaskController {
         return Result.success(agentTaskService.listMine(page, size));
     }
 
+    @GetMapping("/{id}")
+    @Operation(summary = "定时任务详情")
+    public Result<TaskVO> get(@PathVariable Long id) {
+        return Result.success(agentTaskService.get(id));
+    }
+
     @PostMapping
     @Operation(summary = "新建定时任务")
     public Result<TaskVO> create(@Valid @RequestBody TaskCreateRequest request) {

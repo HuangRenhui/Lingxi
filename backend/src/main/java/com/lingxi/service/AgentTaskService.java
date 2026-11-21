@@ -16,6 +16,11 @@ public interface AgentTaskService {
      */
     List<TaskVO> listMine(int page, int size);
 
+    /**
+     * 查询任务详情，仅限本人。
+     */
+    TaskVO get(Long id);
+
     TaskVO create(TaskCreateRequest request);
 
     TaskVO update(Long id, TaskUpdateRequest request);

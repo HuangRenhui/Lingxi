@@ -1,7 +1,7 @@
 import request from '@/utils/request'
 
-export function listTasks() {
-  return request.get('/agent/tasks')
+export function listTasks({ page = 1, size = 100 } = {}) {
+  return request.get('/agent/tasks', { params: { page, size } })
 }
 
 export function createTask(data) {
