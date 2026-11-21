@@ -68,9 +68,4 @@ public class ArtifactUpdateRequest {
     @Max(value = 1, message = "回收站状态仅支持 0 或 1")
     @Schema(description = "回收站：1 是，0 否", example = "0")
     private Integer trashed;
-
-    /** 审核状态 */
-    @Pattern(regexp = "PENDING|APPROVED|REJECTED", message = "审核状态仅支持 PENDING/APPROVED/REJECTED")
-    @Schema(description = "审核状态", example = "APPROVED")
-    private String status;
 }

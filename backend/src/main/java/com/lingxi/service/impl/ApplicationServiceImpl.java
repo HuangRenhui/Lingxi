@@ -1,6 +1,7 @@
 package com.lingxi.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lingxi.common.BusinessException;
 import com.lingxi.common.ResultCode;
@@ -10,6 +11,7 @@ import com.lingxi.entity.AiApplication;
 import com.lingxi.mapper.AiApplicationMapper;
 import com.lingxi.security.SecurityUtils;
 import com.lingxi.service.ApplicationService;
+import com.lingxi.service.SensitiveWordService;
 import com.lingxi.vo.ApplicationVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -30,6 +32,7 @@ public class ApplicationServiceImpl implements ApplicationService {
     private static final int MAX_PAGE_SIZE = 100;
 
     private final AiApplicationMapper applicationMapper;
+    private final SensitiveWordService sensitiveWordService;
 
     @Override
     public List<ApplicationVO> listMine(int page, int size) {
@@ -58,6 +61,7 @@ public class ApplicationServiceImpl implements ApplicationService {
         // 未指定类型时按通用应用处理
         application.setAppType(StringUtils.hasText(request.getAppType()) ? request.getAppType() : "GENERAL");
         application.setStatus(1);
+        sensitiveWordService.checkContent(application.getName(), application.getDescription());
         applicationMapper.insert(application);
         // 重新查询以拿到数据库生成的创建/更新时间；并发删除时给出业务错误而不是 NPE
         AiApplication saved = applicationMapper.selectById(application.getId());
@@ -89,7 +93,35 @@ public class ApplicationServiceImpl implements ApplicationService {
             application.setStatus(request.getStatus());
         }
 
-        applicationMapper.updateById(application);
+        // 只校验本次改动的文本，避免启用/停用被历史内容误拦截
+        sensitiveWordService.checkContent(
+                request.getName() == null ? null : application.getName(),
+                request.getDescription() == null ? null : application.getDescription());
+
+        // 用 UpdateWrapper 显式写入 null，保证「传入空串清空简介」真实生效
+        LambdaUpdateWrapper<AiApplication> update =
+                new LambdaUpdateWrapper<AiApplication>().eq(AiApplication::getId, id);
+        boolean changed = false;
+        if (request.getName() != null) {
+            update.set(AiApplication::getName, application.getName());
+            changed = true;
+        }
+        if (request.getDescription() != null) {
+            update.set(AiApplication::getDescription, application.getDescription());
+            changed = true;
+        }
+        if (request.getAppType() != null) {
+            update.set(AiApplication::getAppType, application.getAppType());
+            changed = true;
+        }
+        if (request.getStatus() != null) {
+            update.set(AiApplication::getStatus, application.getStatus());
+            changed = true;
+        }
+        if (!changed) {
+            return toVO(application);
+        }
+        applicationMapper.update(null, update);
         return toVO(applicationMapper.selectById(id));
     }
 

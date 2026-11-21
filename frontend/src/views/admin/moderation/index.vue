@@ -1,9 +1,9 @@
 <template>
   <div class="admin-page">
-    <PageHeader title="内容审核" description="审核待发布的图片、视频产物，维护提示词敏感词库。" flush>
-      <el-button v-if="tab === 'queue'" round type="primary" @click="approveAllLow">
+    <PageHeader title="内容审核" description="处理用户对图片、视频与文本产物的举报，维护提示词敏感词库。" flush>
+      <el-button v-if="tab === 'queue'" round type="primary" :loading="bulkReviewing" @click="approveAllPending">
         <el-icon><Select /></el-icon>
-        通过全部低风险
+        处理全部待办
       </el-button>
       <el-button v-else round type="primary" @click="openWord">
         <el-icon><Plus /></el-icon>
@@ -12,10 +12,10 @@
     </PageHeader>
 
     <section class="stat-grid">
-      <StatCard label="待审核" :value="stats.pending" icon="Clock" hint="按创建时间倒序排队" />
-      <StatCard label="今日已审" :value="stats.reviewedToday" icon="Select" hint="含通过与驳回" />
-      <StatCard label="驳回率" :value="stats.rejectRate" unit="%" icon="CircleClose" hint="近 7 天驳回占比" />
-      <StatCard label="高风险内容" :value="stats.highRisk" icon="Warning" hint="命中敏感词或人工标记" />
+      <StatCard label="待处理" :value="stats.pending" icon="Clock" hint="按提交时间倒序排队" />
+      <StatCard label="已处理" :value="stats.reviewed" icon="Select" hint="含已处理与已驳回" />
+      <StatCard label="驳回率" :value="stats.rejectRate" unit="%" icon="CircleClose" hint="已处理举报中的驳回占比" />
+      <StatCard label="举报总数" :value="stats.total" icon="Warning" hint="全部举报记录" />
     </section>
 
     <div class="panel tab-panel">
@@ -24,58 +24,77 @@
 
     <template v-if="tab === 'queue'">
       <section class="filters panel">
-        <el-input v-model="keyword" class="filter-search" placeholder="搜索标题、用户或提示词" clearable>
+        <el-input v-model="keyword" class="filter-search" placeholder="搜索举报原因或对象 ID" clearable>
           <template #prefix>
             <el-icon><Search /></el-icon>
           </template>
         </el-input>
         <el-select v-model="type" class="filter-item">
           <el-option label="全部类型" value="all" />
-          <el-option label="图片" value="image" />
-          <el-option label="视频" value="video" />
+          <el-option label="图片" value="IMAGE" />
+          <el-option label="视频" value="VIDEO" />
+          <el-option label="产物" value="ARTIFACT" />
+          <el-option label="文本" value="TEXT" />
         </el-select>
         <el-select v-model="status" class="filter-item">
           <el-option label="全部状态" value="all" />
-          <el-option label="待审核" value="PENDING" />
-          <el-option label="已通过" value="APPROVED" />
+          <el-option label="待处理" value="PENDING" />
+          <el-option label="已处理" value="RESOLVED" />
           <el-option label="已驳回" value="REJECTED" />
         </el-select>
-        <el-select v-model="risk" class="filter-item">
-          <el-option label="全部风险" value="all" />
-          <el-option label="低风险" value="低" />
-          <el-option label="中风险" value="中" />
-          <el-option label="高风险" value="高" />
-        </el-select>
         <el-button round @click="resetFilters">重置筛选</el-button>
+        <span class="filter-action muted">共 {{ filteredQueue.length }} 条举报</span>
       </section>
 
-      <div v-if="filteredQueue.length" class="review-grid">
-        <article v-for="item in filteredQueue" :key="item.id" class="panel review-card">
-          <div class="review-thumb">
-            <img :src="item.url" :alt="item.title" />
-            <span class="review-type">{{ item.type === 'image' ? '图片' : '视频' }}</span>
-            <el-tag class="review-risk" :type="riskType(item.risk)" size="small" effect="dark">
-              {{ item.risk }}风险
-            </el-tag>
-          </div>
-          <div class="review-body">
-            <strong class="review-title">{{ item.title }}</strong>
-            <span class="review-meta">{{ item.user }} · {{ item.tool }}</span>
-            <p class="review-prompt">{{ item.prompt }}</p>
-            <span class="review-time">{{ item.createdAt }}</span>
-            <div class="review-actions">
-              <template v-if="item.status === 'PENDING'">
-                <el-button size="small" round type="success" plain @click="approve(item)">通过</el-button>
-                <el-button size="small" round type="danger" plain @click="openReject(item)">驳回</el-button>
-              </template>
-              <el-tag v-else :type="item.status === 'APPROVED' ? 'success' : 'danger'" size="small" effect="plain">
-                {{ item.status === 'APPROVED' ? '已通过' : '已驳回' }}
+      <section class="panel table-panel">
+        <el-table v-loading="loading" :data="queuePaged" size="small">
+          <el-table-column prop="id" label="ID" width="80" />
+          <el-table-column label="举报对象" width="150">
+            <template #default="{ row }">
+              <el-tag size="small" effect="plain">{{ targetTypeLabel(row.targetType) }}</el-tag>
+              <span class="mono report-target">#{{ row.targetId }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="reason" label="举报原因" min-width="220" />
+          <el-table-column label="举报人" width="110">
+            <template #default="{ row }">
+              <span :class="row.reporterId ? 'mono' : 'muted'">{{ row.reporterId || '—' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="100">
+            <template #default="{ row }">
+              <el-tag :type="reportStatusOf(row.status).type" size="small" effect="plain">
+                {{ reportStatusOf(row.status).label }}
               </el-tag>
-            </div>
-          </div>
-        </article>
-      </div>
-      <EmptyState v-else text="没有匹配的待审产物" />
+            </template>
+          </el-table-column>
+          <el-table-column label="处理结果" min-width="160">
+            <template #default="{ row }">
+              <span :class="row.result ? '' : 'muted'">{{ row.result || '—' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="提交时间" width="150">
+            <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="160" fixed="right">
+            <template #default="{ row }">
+              <div class="actions">
+                <el-button v-if="row.status === 'PENDING'" link size="small" type="success" @click="approve(row)">
+                  处理
+                </el-button>
+                <el-button v-if="row.status === 'PENDING'" link size="small" type="danger" @click="openReject(row)">
+                  驳回
+                </el-button>
+                <el-button link size="small" @click="removeReport(row)">删除</el-button>
+              </div>
+            </template>
+          </el-table-column>
+          <template #empty>
+            <div class="table-empty">没有匹配的举报记录</div>
+          </template>
+        </el-table>
+        <TablePager v-model:page="page" :total="filteredQueue.length" />
+      </section>
     </template>
 
     <template v-else>
@@ -94,7 +113,7 @@
       </section>
 
       <section class="panel table-panel">
-        <el-table :data="pagedWords" size="small">
+        <el-table v-loading="wordLoading" :data="pagedWords" size="small">
           <el-table-column prop="word" label="敏感词" min-width="180">
             <template #default="{ row }">
               <span class="word">{{ row.word }}</span>
@@ -128,7 +147,7 @@
       </section>
     </template>
 
-    <el-dialog v-model="rejectVisible" title="驳回产物" width="460px">
+    <el-dialog v-model="rejectVisible" title="驳回举报" width="460px">
       <el-form label-position="top">
         <el-form-item label="驳回原因">
           <el-select v-model="rejectReason" placeholder="选择常见原因">
@@ -171,7 +190,7 @@
       </el-form>
       <template #footer>
         <el-button round @click="wordVisible = false">取消</el-button>
-        <el-button round type="primary" @click="addWords">确认添加</el-button>
+        <el-button round type="primary" :loading="wordSubmitting" @click="addWords">确认添加</el-button>
       </template>
     </el-dialog>
 
@@ -184,36 +203,51 @@
       />
       <template #footer>
         <el-button round @click="importVisible = false">取消</el-button>
-        <el-button round type="primary" @click="doImport">开始导入</el-button>
+        <el-button round type="primary" :loading="wordSubmitting" @click="doImport">开始导入</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import dayjs from 'dayjs'
 import PageHeader from '@/components/PageHeader.vue'
 import StatCard from '@/components/StatCard.vue'
 import TabStrip from '@/components/TabStrip.vue'
-import EmptyState from '@/components/EmptyState.vue'
 import TablePager from '@/components/TablePager.vue'
 import { loadSensitiveWords, saveSensitiveWords } from '@/mock/admin-extra'
-import { listModeration, moderateAsset } from '@/mock/platform'
+import { listModeration } from '@/mock/platform'
+import {
+  deleteAdminModerationReport,
+  listAdminModerationReports,
+  updateAdminModerationReport
+} from '@/api/adminModerationReport'
+import {
+  createAdminSensitiveWords,
+  deleteAdminSensitiveWord,
+  listAdminSensitiveWords,
+  updateAdminSensitiveWord
+} from '@/api/adminSensitiveWord'
+import { fetchAllPages } from '@/utils/pagination'
 
 const tabs = [
-  { key: 'queue', label: '审核队列' },
+  { key: 'queue', label: '举报队列' },
   { key: 'word', label: '敏感词库' }
 ]
 
 const tab = ref('queue')
-const queue = ref(listModeration())
-const words = ref(loadSensitiveWords())
+const queue = ref([])
+const demoMode = ref(false)
+const loading = ref(false)
+const words = ref([])
+const wordDemoMode = ref(false)
+const wordLoading = ref(false)
+const wordSubmitting = ref(false)
 const keyword = ref('')
 const type = ref('all')
 const status = ref('all')
-const risk = ref('all')
 const wordKeyword = ref('')
 const wordCategory = ref('all')
 const rejectVisible = ref(false)
@@ -223,11 +257,110 @@ const current = ref(null)
 const wordVisible = ref(false)
 const importVisible = ref(false)
 const importText = ref('')
+const page = ref(1)
 const wordPage = ref(1)
 const pageSize = 10
 
 const wordForm = reactive({ words: '', category: '交易', level: '中' })
 const categories = ['交易', '暴力', '政治', '违法', '隐私', '色情', '其他']
+
+/** 后端状态与页面展示的映射 */
+function reportStatusOf(value) {
+  return (
+    {
+      PENDING: { label: '待处理', type: 'warning' },
+      RESOLVED: { label: '已处理', type: 'success' },
+      REJECTED: { label: '已驳回', type: 'danger' }
+    }[value] || { label: value || '—', type: 'info' }
+  )
+}
+
+function targetTypeLabel(value) {
+  return { IMAGE: '图片', VIDEO: '视频', ARTIFACT: '产物', TEXT: '文本' }[value] || value || '—'
+}
+
+function formatTime(value) {
+  return value ? dayjs(value).format('YYYY-MM-DD HH:mm') : '—'
+}
+
+/** 后端不可用时，把演示用的产物审核队列转换为举报记录结构 */
+function fromDemoReport(item, index) {
+  return {
+    id: item.id,
+    targetType: item.type === 'video' ? 'VIDEO' : 'IMAGE',
+    targetId: index + 1,
+    reason: item.prompt || item.title,
+    reporterId: null,
+    status: item.status === 'APPROVED' ? 'RESOLVED' : item.status,
+    result: item.status === 'APPROVED' ? '审核通过' : item.status === 'REJECTED' ? '含违规或敏感内容' : '',
+    createdAt: item.createdAt,
+    updatedAt: item.createdAt
+  }
+}
+
+async function loadQueue() {
+  loading.value = true
+  try {
+    // 逐页取完，避免举报总数超过单页 100 条时后面的记录不可见
+    const page = await fetchAllPages(params => listAdminModerationReports(params))
+    if (page) {
+      queue.value = page.list
+      demoMode.value = false
+      if (page.truncated) {
+        ElMessage.warning('举报记录超过 1000 条，仅加载前 1000 条')
+      }
+    } else if (import.meta.env.DEV) {
+      queue.value = listModeration().map(fromDemoReport)
+      demoMode.value = true
+    } else {
+      queue.value = []
+      demoMode.value = false
+    }
+  } catch (error) {
+    queue.value = []
+    demoMode.value = false
+    if (import.meta.env.DEV) {
+      queue.value = listModeration().map(fromDemoReport)
+      demoMode.value = true
+    }
+  } finally {
+    loading.value = false
+  }
+}
+
+/**
+ * 加载敏感词库：优先服务端，后端不可用时在开发环境下回退本地演示数据。
+ * 词库必须落在服务端，否则换设备/清缓存后会丢失。
+ */
+async function loadWords() {
+  wordLoading.value = true
+  try {
+    const page = await fetchAllPages(params => listAdminSensitiveWords(params))
+    if (page) {
+      words.value = page.list.map(item => ({ ...item, enabled: item.enabled === true }))
+      wordDemoMode.value = false
+      if (page.truncated) {
+        ElMessage.warning('敏感词超过 1000 条，仅加载前 1000 条')
+      }
+    } else if (import.meta.env.DEV) {
+      words.value = loadSensitiveWords()
+      wordDemoMode.value = true
+    } else {
+      words.value = []
+      wordDemoMode.value = false
+    }
+  } catch (error) {
+    words.value = import.meta.env.DEV ? loadSensitiveWords() : []
+    wordDemoMode.value = import.meta.env.DEV
+  } finally {
+    wordLoading.value = false
+  }
+}
+
+onMounted(() => {
+  loadQueue()
+  loadWords()
+})
 
 const stats = computed(() => {
   const pending = queue.value.filter(item => item.status === 'PENDING').length
@@ -235,23 +368,26 @@ const stats = computed(() => {
   const reviewed = queue.value.filter(item => item.status !== 'PENDING').length
   return {
     pending,
-    reviewedToday: reviewed,
+    reviewed,
     rejectRate: reviewed ? ((rejected / reviewed) * 100).toFixed(1) : '0.0',
-    highRisk: queue.value.filter(item => item.risk === '高' || item.status === 'PENDING').length
+    total: queue.value.length
   }
 })
 
 const filteredQueue = computed(() => {
   const text = keyword.value.trim().toLowerCase()
   return queue.value.filter(item => {
-    const matchKeyword =
-      !text || `${item.title}${item.user}${item.prompt}`.toLowerCase().includes(text)
-    const matchType = type.value === 'all' || item.type === type.value
+    const haystack = `${item.targetType || ''}${item.reason || ''}${item.targetId || ''}${item.reporterId || ''}`
+    const matchKeyword = !text || haystack.toLowerCase().includes(text)
+    const matchType = type.value === 'all' || item.targetType === type.value
     const matchStatus = status.value === 'all' || item.status === status.value
-    const matchRisk = risk.value === 'all' || item.risk === risk.value
-    return matchKeyword && matchType && matchStatus && matchRisk
+    return matchKeyword && matchType && matchStatus
   })
 })
+
+const queuePaged = computed(() =>
+  filteredQueue.value.slice((page.value - 1) * pageSize, page.value * pageSize)
+)
 
 const filteredWords = computed(() => {
   const text = wordKeyword.value.trim().toLowerCase()
@@ -266,64 +402,150 @@ const pagedWords = computed(() =>
   filteredWords.value.slice((wordPage.value - 1) * pageSize, wordPage.value * pageSize)
 )
 
+watch([keyword, type, status], () => {
+  page.value = 1
+})
+
 watch([wordKeyword, wordCategory], () => {
   wordPage.value = 1
 })
-
-function riskType(value) {
-  return { 高: 'danger', 中: 'warning', 低: 'success' }[value] || 'info'
-}
 
 function resetFilters() {
   keyword.value = ''
   type.value = 'all'
   status.value = 'all'
-  risk.value = 'all'
 }
 
-function approve(item) {
-  moderateAsset(item.id, 'APPROVED')
-  queue.value = listModeration()
-  ElMessage.success('已通过审核')
-}
-
-function approveAllLow() {
-  const list = queue.value.filter(item => item.status === 'PENDING' && item.risk === '低')
-  if (!list.length) {
-    ElMessage.info('没有低风险待审产物')
+async function approve(row) {
+  if (demoMode.value) {
+    row.status = 'RESOLVED'
+    row.result = '审核通过'
+    ElMessage.success('已处理举报')
     return
   }
-  list.forEach(item => moderateAsset(item.id, 'APPROVED'))
-  queue.value = listModeration()
-  ElMessage.success(`已批量通过 ${list.length} 个产物`)
+  try {
+    await updateAdminModerationReport(row.id, { status: 'RESOLVED', result: '审核通过' })
+    await loadQueue()
+    ElMessage.success('已处理举报')
+  } catch (error) {
+    // 请求层已统一提示错误
+  }
 }
 
-function openReject(item) {
-  current.value = item
+const bulkReviewing = ref(false)
+
+async function approveAllPending() {
+  const list = queue.value.filter(item => item.status === 'PENDING')
+  if (!list.length) {
+    ElMessage.info('没有待处理的举报')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `将把 ${list.length} 条待处理举报全部标记为已处理，该操作不可逐条撤销，确定继续吗？`,
+      '处理全部待办',
+      { confirmButtonText: '全部通过', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch (error) {
+    return
+  }
+  if (demoMode.value) {
+    list.forEach(item => {
+      item.status = 'RESOLVED'
+      item.result = '审核通过'
+    })
+    ElMessage.success(`已处理 ${list.length} 条举报`)
+    return
+  }
+  if (bulkReviewing.value) {
+    return
+  }
+  bulkReviewing.value = true
+  try {
+    // 逐条提交并汇总结果：部分失败时刷新列表，让管理员准确看到剩余待办，
+    // 而不是笼统失败后重复点击导致重复处理。
+    const results = await Promise.allSettled(
+      list.map(item => updateAdminModerationReport(item.id, { status: 'RESOLVED', result: '审核通过' }))
+    )
+    const failed = results.filter(result => result.status === 'rejected').length
+    await loadQueue()
+    if (failed > 0) {
+      ElMessage.error(`${list.length - failed} 条成功，${failed} 条失败，请重试剩余待办`)
+      return
+    }
+    ElMessage.success(`已处理 ${list.length} 条举报`)
+  } finally {
+    bulkReviewing.value = false
+  }
+}
+
+function openReject(row) {
+  current.value = row
   rejectReason.value = ''
   rejectNote.value = ''
   rejectVisible.value = true
 }
 
-function confirmReject() {
+async function confirmReject() {
   if (!rejectReason.value) {
     ElMessage.warning('请选择驳回原因')
     return
   }
   if (current.value) {
-    const reason = rejectNote.value.trim()
+    const result = rejectNote.value.trim()
       ? `${rejectReason.value}：${rejectNote.value.trim()}`
       : rejectReason.value
-    moderateAsset(current.value.id, 'REJECTED', reason)
-    queue.value = listModeration()
+    if (demoMode.value) {
+      current.value.status = 'REJECTED'
+      current.value.result = result
+    } else {
+      try {
+        await updateAdminModerationReport(current.value.id, { status: 'REJECTED', result })
+        await loadQueue()
+      } catch (error) {
+        rejectVisible.value = false
+        return
+      }
+    }
   }
   rejectVisible.value = false
-  ElMessage.success('已驳回并通知用户')
+  ElMessage.success('已驳回举报')
 }
 
-function toggleWord(row) {
-  saveSensitiveWords(words.value)
-  ElMessage.success(row.enabled ? '敏感词已启用' : '敏感词已停用')
+async function removeReport(row) {
+  try {
+    await ElMessageBox.confirm(`确认删除举报 #${row.id}？`, '删除举报', { type: 'warning' })
+  } catch (error) {
+    return
+  }
+  if (demoMode.value) {
+    queue.value = queue.value.filter(item => item.id !== row.id)
+    ElMessage.success('已删除')
+    return
+  }
+  try {
+    await deleteAdminModerationReport(row.id)
+    await loadQueue()
+    ElMessage.success('已删除')
+  } catch (error) {
+    // 请求层已统一提示错误
+  }
+}
+
+async function toggleWord(row) {
+  const next = row.enabled === true
+  if (wordDemoMode.value) {
+    saveSensitiveWords(words.value)
+    ElMessage.success(next ? '敏感词已启用' : '敏感词已停用')
+    return
+  }
+  try {
+    await updateAdminSensitiveWord(row.id, { enabled: next })
+    ElMessage.success(next ? '敏感词已启用' : '敏感词已停用')
+  } catch (error) {
+    // 失败时回滚开关，避免界面状态与后端不一致
+    row.enabled = !next
+  }
 }
 
 async function removeWord(row) {
@@ -332,9 +554,19 @@ async function removeWord(row) {
   } catch (error) {
     return
   }
-  words.value = words.value.filter(item => item.id !== row.id)
-  saveSensitiveWords(words.value)
-  ElMessage.success('已删除')
+  if (wordDemoMode.value) {
+    words.value = words.value.filter(item => item.id !== row.id)
+    saveSensitiveWords(words.value)
+    ElMessage.success('已删除')
+    return
+  }
+  try {
+    await deleteAdminSensitiveWord(row.id)
+    await loadWords()
+    ElMessage.success('已删除')
+  } catch (error) {
+    // 请求层已统一提示错误
+  }
 }
 
 function openWord() {
@@ -344,7 +576,8 @@ function openWord() {
   wordVisible.value = true
 }
 
-function addWords() {
+async function addWords() {
+  if (wordSubmitting.value) return
   const list = wordForm.words
     .split('\n')
     .map(item => item.trim())
@@ -353,22 +586,41 @@ function addWords() {
     ElMessage.warning('请至少输入一个敏感词')
     return
   }
-  const created = list.map((word, index) => ({
-    id: `sw-${Date.now()}-${index}`,
-    word,
-    category: wordForm.category,
-    level: wordForm.level,
-    hits: 0,
-    enabled: true,
-    createdAt: dayjs().format('YYYY-MM-DD HH:mm')
-  }))
-  words.value = [...created, ...words.value]
-  saveSensitiveWords(words.value)
-  wordVisible.value = false
-  ElMessage.success(`已添加 ${created.length} 个敏感词`)
+  if (wordDemoMode.value) {
+    const created = list.map((word, index) => ({
+      id: `sw-${Date.now()}-${index}`,
+      word,
+      category: wordForm.category,
+      level: wordForm.level,
+      hits: 0,
+      enabled: true,
+      createdAt: dayjs().format('YYYY-MM-DD HH:mm')
+    }))
+    words.value = [...created, ...words.value]
+    saveSensitiveWords(words.value)
+    wordVisible.value = false
+    ElMessage.success(`已添加 ${created.length} 个敏感词`)
+    return
+  }
+  wordSubmitting.value = true
+  try {
+    const created = await createAdminSensitiveWords({
+      words: list,
+      category: wordForm.category,
+      level: wordForm.level
+    })
+    await loadWords()
+    wordVisible.value = false
+    ElMessage.success(`已添加 ${Array.isArray(created) ? created.length : list.length} 个敏感词`)
+  } catch (error) {
+    // 请求层已统一提示错误
+  } finally {
+    wordSubmitting.value = false
+  }
 }
 
-function doImport() {
+async function doImport() {
+  if (wordSubmitting.value) return
   const lines = importText.value
     .split('\n')
     .map(item => item.trim())
@@ -377,23 +629,64 @@ function doImport() {
     ElMessage.warning('请粘贴需要导入的内容')
     return
   }
-  const created = lines.map((line, index) => {
+  // 后端按「分类 + 级别」批量写入，这里先按这两个维度分组
+  const groups = new Map()
+  for (const line of lines) {
     const [word, category, level] = line.split(/[,，]/).map(item => item?.trim())
-    return {
-      id: `sw-${Date.now()}-${index}`,
-      word,
-      category: categories.includes(category) ? category : '其他',
-      level: ['高', '中', '低'].includes(level) ? level : '中',
-      hits: 0,
-      enabled: true,
-      createdAt: dayjs().format('YYYY-MM-DD HH:mm')
+    if (!word) continue
+    const resolvedCategory = categories.includes(category) ? category : '其他'
+    const resolvedLevel = ['高', '中', '低'].includes(level) ? level : '中'
+    const key = `${resolvedCategory}|${resolvedLevel}`
+    if (!groups.has(key)) {
+      groups.set(key, { category: resolvedCategory, level: resolvedLevel, words: [] })
     }
-  })
-  words.value = [...created, ...words.value]
-  saveSensitiveWords(words.value)
-  importVisible.value = false
-  importText.value = ''
-  ElMessage.success(`已导入 ${created.length} 个敏感词`)
+    groups.get(key).words.push(word)
+  }
+  if (!groups.size) {
+    ElMessage.warning('没有解析到有效的敏感词')
+    return
+  }
+
+  if (wordDemoMode.value) {
+    const created = []
+    let index = 0
+    for (const group of groups.values()) {
+      for (const word of group.words) {
+        created.push({
+          id: `sw-${Date.now()}-${index++}`,
+          word,
+          category: group.category,
+          level: group.level,
+          hits: 0,
+          enabled: true,
+          createdAt: dayjs().format('YYYY-MM-DD HH:mm')
+        })
+      }
+    }
+    words.value = [...created, ...words.value]
+    saveSensitiveWords(words.value)
+    importVisible.value = false
+    importText.value = ''
+    ElMessage.success(`已导入 ${created.length} 个敏感词`)
+    return
+  }
+
+  wordSubmitting.value = true
+  try {
+    let total = 0
+    for (const group of groups.values()) {
+      const created = await createAdminSensitiveWords(group)
+      total += Array.isArray(created) ? created.length : group.words.length
+    }
+    await loadWords()
+    importVisible.value = false
+    importText.value = ''
+    ElMessage.success(`已导入 ${total} 个敏感词`)
+  } catch (error) {
+    // 请求层已统一提示错误；已成功的分组会在列表中体现，可重新导入剩余部分
+  } finally {
+    wordSubmitting.value = false
+  }
 }
 </script>
 
@@ -402,84 +695,16 @@ function doImport() {
   padding: 6px 20px 0;
 }
 
-.review-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
-  gap: 14px;
-}
-
-.review-card {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.review-thumb {
-  position: relative;
-  aspect-ratio: 16 / 10;
-  background: #0b0e13;
-}
-
-.review-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.review-type {
-  position: absolute;
-  left: 9px;
-  bottom: 9px;
-  padding: 2px 7px;
-  border-radius: 6px;
-  background: rgba(8, 9, 12, 0.72);
-  color: #c9d1d9;
-  font-size: 10.5px;
-}
-
-.review-risk {
-  position: absolute;
-  top: 9px;
-  right: 9px;
-}
-
-.review-body {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 12px 14px 14px;
-}
-
-.review-title {
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.review-meta,
-.review-time {
-  color: var(--app-muted);
-  font-size: 11px;
-}
-
-.review-prompt {
-  margin: 2px 0;
+.report-target {
+  margin-left: 6px;
   color: var(--app-muted);
   font-size: 11.5px;
-  line-height: 1.6;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
-.review-actions {
+.actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-  padding-top: 10px;
-  border-top: 1px solid var(--app-border);
+  gap: 4px;
 }
 
 .word {

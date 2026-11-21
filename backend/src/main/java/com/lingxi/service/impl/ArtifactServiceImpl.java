@@ -1,6 +1,7 @@
 package com.lingxi.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lingxi.common.BusinessException;
 import com.lingxi.common.ResultCode;
@@ -10,6 +11,7 @@ import com.lingxi.entity.Artifact;
 import com.lingxi.mapper.ArtifactMapper;
 import com.lingxi.security.SecurityUtils;
 import com.lingxi.service.ArtifactService;
+import com.lingxi.service.SensitiveWordService;
 import com.lingxi.vo.ArtifactVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -31,28 +33,31 @@ public class ArtifactServiceImpl implements ArtifactService {
     private static final int MAX_PAGE_SIZE = 100;
 
     private final ArtifactMapper artifactMapper;
+    private final SensitiveWordService sensitiveWordService;
 
     @Override
     public List<ArtifactVO> listMine(int page, int size, String type, String keyword, Integer trashed) {
         // 页码与页大小做边界收敛，避免异常参数打到数据库
         long current = Math.max(1, page);
         long pageSize = Math.min(Math.max(1, size), MAX_PAGE_SIZE);
-        // 缺省只查回收站之外的作品；1 表示只看回收站
-        int trashedFlag = trashed == null ? 0 : trashed;
-        if (trashedFlag != 0 && trashedFlag != 1) {
+        // 缺省返回全部作品；0 只看正常作品，1 只看回收站
+        if (trashed != null && trashed != 0 && trashed != 1) {
             throw new BusinessException(ResultCode.PARAM_ERROR);
         }
 
         String typeFilter = StringUtils.hasText(type) ? type.trim().toUpperCase(Locale.ROOT) : null;
         String keywordFilter = StringUtils.hasText(keyword) ? keyword.trim() : null;
+        // 关键字必须转义 LIKE 通配符，否则 "%" 会让条件退化为全表匹配
+        String likeKeyword = keywordFilter == null ? null
+                : keywordFilter.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
         LambdaQueryWrapper<Artifact> wrapper = new LambdaQueryWrapper<Artifact>()
                 .eq(Artifact::getUserId, SecurityUtils.getUserId())
-                .eq(Artifact::getTrashed, trashedFlag)
+                .eq(trashed != null, Artifact::getTrashed, trashed)
                 .eq(typeFilter != null, Artifact::getType, typeFilter)
-                .and(keywordFilter != null, w -> w
-                        .like(Artifact::getTitle, keywordFilter)
+                .and(likeKeyword != null, w -> w
+                        .like(Artifact::getTitle, likeKeyword)
                         .or()
-                        .like(Artifact::getPrompt, keywordFilter))
+                        .like(Artifact::getPrompt, likeKeyword))
                 .orderByDesc(Artifact::getId);
         Page<Artifact> result = artifactMapper.selectPage(new Page<>(current, pageSize), wrapper);
         return result.getRecords().stream().map(this::toVO).collect(Collectors.toList());
@@ -76,10 +81,12 @@ public class ArtifactServiceImpl implements ArtifactService {
         artifact.setUrl(request.getUrl().trim());
         artifact.setPosterUrl(trimToNull(request.getPosterUrl()));
         artifact.setSizeBytes(request.getSizeBytes() == null ? 0L : request.getSizeBytes());
-        // 新建产物默认未收藏、不在回收站、审核通过
+        // 用户可自主编辑的文本进入敏感词校验，命中直接拒绝入库
+        sensitiveWordService.checkContent(artifact.getTitle(), artifact.getPrompt());
+        // 新建产物默认未收藏、不在回收站、待审核
         artifact.setFavorite(0);
         artifact.setTrashed(0);
-        artifact.setStatus("APPROVED");
+        artifact.setStatus("PENDING");
         artifactMapper.insert(artifact);
         // 重新查询以拿到数据库生成的创建/更新时间
         return toVO(artifactMapper.selectById(artifact.getId()));
@@ -89,6 +96,10 @@ public class ArtifactServiceImpl implements ArtifactService {
     @Transactional(rollbackFor = Exception.class)
     public ArtifactVO update(Long id, ArtifactUpdateRequest request) {
         Artifact artifact = getOwnedArtifact(id);
+        // 可空字段需要用 UpdateWrapper 显式 set(null) 才能清空：
+        // updateById 默认 NOT_NULL 策略会跳过 null 字段，导致「传入空串清空」静默失效。
+        LambdaUpdateWrapper<Artifact> update = new LambdaUpdateWrapper<Artifact>().eq(Artifact::getId, id);
+        boolean changed = false;
 
         if (request.getTitle() != null) {
             String title = request.getTitle().trim();
@@ -96,18 +107,28 @@ public class ArtifactServiceImpl implements ArtifactService {
                 throw new BusinessException(ResultCode.PARAM_ERROR);
             }
             artifact.setTitle(title);
+            update.set(Artifact::getTitle, title);
+            changed = true;
         }
         if (request.getType() != null) {
             artifact.setType(request.getType());
+            update.set(Artifact::getType, artifact.getType());
+            changed = true;
         }
         if (request.getToolKey() != null) {
             artifact.setToolKey(trimToNull(request.getToolKey()));
+            update.set(Artifact::getToolKey, artifact.getToolKey());
+            changed = true;
         }
         if (request.getToolName() != null) {
             artifact.setToolName(trimToNull(request.getToolName()));
+            update.set(Artifact::getToolName, artifact.getToolName());
+            changed = true;
         }
         if (request.getPrompt() != null) {
             artifact.setPrompt(trimToNull(request.getPrompt()));
+            update.set(Artifact::getPrompt, artifact.getPrompt());
+            changed = true;
         }
         if (request.getUrl() != null) {
             String url = request.getUrl().trim();
@@ -115,24 +136,39 @@ public class ArtifactServiceImpl implements ArtifactService {
                 throw new BusinessException(ResultCode.PARAM_ERROR);
             }
             artifact.setUrl(url);
+            update.set(Artifact::getUrl, url);
+            changed = true;
         }
         if (request.getPosterUrl() != null) {
             artifact.setPosterUrl(trimToNull(request.getPosterUrl()));
+            update.set(Artifact::getPosterUrl, artifact.getPosterUrl());
+            changed = true;
         }
         if (request.getSizeBytes() != null) {
             artifact.setSizeBytes(request.getSizeBytes());
+            update.set(Artifact::getSizeBytes, artifact.getSizeBytes());
+            changed = true;
         }
         if (request.getFavorite() != null) {
             artifact.setFavorite(request.getFavorite());
+            update.set(Artifact::getFavorite, artifact.getFavorite());
+            changed = true;
         }
         if (request.getTrashed() != null) {
             artifact.setTrashed(request.getTrashed());
-        }
-        if (request.getStatus() != null) {
-            artifact.setStatus(request.getStatus());
+            update.set(Artifact::getTrashed, artifact.getTrashed());
+            changed = true;
         }
 
-        artifactMapper.updateById(artifact);
+        // 只校验本次改动的文本，避免收藏/回收站等操作被历史内容误拦截
+        sensitiveWordService.checkContent(
+                request.getTitle() == null ? null : artifact.getTitle(),
+                request.getPrompt() == null ? null : artifact.getPrompt());
+
+        if (!changed) {
+            return toVO(artifact);
+        }
+        artifactMapper.update(null, update);
         return toVO(artifactMapper.selectById(id));
     }
 

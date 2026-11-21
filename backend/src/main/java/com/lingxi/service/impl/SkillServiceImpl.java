@@ -1,6 +1,7 @@
 package com.lingxi.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lingxi.common.BusinessException;
 import com.lingxi.common.ResultCode;
@@ -9,6 +10,7 @@ import com.lingxi.dto.SkillUpdateRequest;
 import com.lingxi.entity.AiSkill;
 import com.lingxi.mapper.AiSkillMapper;
 import com.lingxi.security.SecurityUtils;
+import com.lingxi.service.SensitiveWordService;
 import com.lingxi.service.SkillService;
 import com.lingxi.vo.SkillVO;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +32,7 @@ public class SkillServiceImpl implements SkillService {
     private static final int MAX_PAGE_SIZE = 100;
 
     private final AiSkillMapper skillMapper;
+    private final SensitiveWordService sensitiveWordService;
 
     @Override
     public List<SkillVO> listMine(int page, int size) {
@@ -60,6 +63,7 @@ public class SkillServiceImpl implements SkillService {
         // 未指定分类时按社区技能处理
         skill.setCategory(StringUtils.hasText(request.getCategory()) ? request.getCategory() : "COMMUNITY");
         skill.setStatus(1);
+        sensitiveWordService.checkContent(skill.getName(), skill.getDescription(), skill.getContent());
         skillMapper.insert(skill);
         // 重新查询以拿到数据库生成的创建/更新时间
         return toVO(skillMapper.selectById(skill.getId()));
@@ -90,7 +94,39 @@ public class SkillServiceImpl implements SkillService {
             skill.setStatus(request.getStatus());
         }
 
-        skillMapper.updateById(skill);
+        // 只校验本次改动的文本，避免启停操作被历史内容误拦截
+        sensitiveWordService.checkContent(
+                request.getName() == null ? null : skill.getName(),
+                request.getDescription() == null ? null : skill.getDescription(),
+                request.getContent() == null ? null : skill.getContent());
+
+        // 用 UpdateWrapper 显式写入 null，保证「传入空串清空简介」真实生效
+        LambdaUpdateWrapper<AiSkill> update = new LambdaUpdateWrapper<AiSkill>().eq(AiSkill::getId, id);
+        boolean changed = false;
+        if (request.getName() != null) {
+            update.set(AiSkill::getName, skill.getName());
+            changed = true;
+        }
+        if (request.getDescription() != null) {
+            update.set(AiSkill::getDescription, skill.getDescription());
+            changed = true;
+        }
+        if (request.getContent() != null) {
+            update.set(AiSkill::getContent, skill.getContent());
+            changed = true;
+        }
+        if (request.getCategory() != null) {
+            update.set(AiSkill::getCategory, skill.getCategory());
+            changed = true;
+        }
+        if (request.getStatus() != null) {
+            update.set(AiSkill::getStatus, skill.getStatus());
+            changed = true;
+        }
+        if (!changed) {
+            return toVO(skill);
+        }
+        skillMapper.update(null, update);
         return toVO(skillMapper.selectById(id));
     }
 
