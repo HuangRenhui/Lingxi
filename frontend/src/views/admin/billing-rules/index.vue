@@ -45,7 +45,7 @@
     </section>
 
     <section class="panel table-panel">
-      <el-table :data="paged" size="small">
+      <el-table v-loading="loading" :data="paged" size="small">
         <el-table-column prop="category" label="类型" width="90">
           <template #default="{ row }">
             <el-tag size="small" effect="plain" :type="categoryType(row.category)">{{ row.category }}</el-tag>
@@ -197,7 +197,7 @@
       </el-form>
       <template #footer>
         <el-button round @click="editVisible = false">取消</el-button>
-        <el-button round type="primary" @click="saveRule">保存规则</el-button>
+        <el-button round type="primary" :loading="saving" @click="saveRule">保存规则</el-button>
       </template>
     </el-dialog>
 
@@ -219,25 +219,34 @@
       </div>
       <template #footer>
         <el-button round @click="adjustVisible = false">取消</el-button>
-        <el-button round type="primary" @click="applyAdjust">确认调价</el-button>
+        <el-button round type="primary" :loading="adjustSubmitting" @click="applyAdjust">确认调价</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import dayjs from 'dayjs'
 import PageHeader from '@/components/PageHeader.vue'
 import StatCard from '@/components/StatCard.vue'
 import TablePager from '@/components/TablePager.vue'
 import { loadBillingRules, saveBillingRules } from '@/mock/admin-extra'
+import {
+  createAdminBillingRule,
+  deleteAdminBillingRule,
+  listAdminBillingRules,
+  updateAdminBillingRule
+} from '@/api/adminBillingRule'
+import { fetchAllPages } from '@/utils/pagination'
 import { downloadCsv } from '@/utils/csv'
 
 const categories = ['对话', '图片', '视频', '音乐']
 
-const rules = ref(loadBillingRules())
+const rules = ref([])
+const demoMode = ref(false)
+const loading = ref(false)
 const keyword = ref('')
 const category = ref('all')
 const status = ref('all')
@@ -245,6 +254,68 @@ const editVisible = ref(false)
 const currentId = ref('')
 const page = ref(1)
 const pageSize = 10
+
+/**
+ * 后端以 priceIn/priceOut/priceCachedIn、costIn/costOut 落库，
+ * 非对话类只有单档价格，这里映射为界面使用的 price/cost。
+ */
+function fromApi(row) {
+  return {
+    ...row,
+    price: Number(row.priceIn || 0),
+    cost: Number(row.costIn || 0),
+    enabled: Boolean(row.enabled),
+    updatedAt: row.updatedAt ? dayjs(row.updatedAt).format('YYYY-MM-DD HH:mm') : ''
+  }
+}
+
+function toPayload(source, token) {
+  return {
+    category: source.category,
+    target: String(source.target || '').trim(),
+    model: String(source.model || '').trim(),
+    unit: String(source.unit || '').trim(),
+    priceIn: token ? Number(source.priceIn) : Number(source.price),
+    priceOut: token ? Number(source.priceOut) : 0,
+    priceCachedIn: token ? Number(source.priceCachedIn) : 0,
+    costIn: token ? Number(source.costIn) : Number(source.cost),
+    costOut: token ? Number(source.costOut) : 0,
+    multiplier: Number(source.multiplier),
+    enabled: source.enabled ? 1 : 0
+  }
+}
+
+async function loadRules() {
+  loading.value = true
+  try {
+    // 逐页取完，避免规则总数超过单页 100 条时后面的规则不可见
+    const page = await fetchAllPages(params => listAdminBillingRules(params))
+    if (page) {
+      rules.value = page.list.map(fromApi)
+      demoMode.value = false
+      if (page.truncated) {
+        ElMessage.warning('计费规则超过 1000 条，仅加载前 1000 条')
+      }
+    } else if (import.meta.env.DEV) {
+      rules.value = loadBillingRules()
+      demoMode.value = true
+    } else {
+      rules.value = []
+      demoMode.value = false
+    }
+  } catch (error) {
+    rules.value = []
+    demoMode.value = false
+    if (import.meta.env.DEV) {
+      rules.value = loadBillingRules()
+      demoMode.value = true
+    }
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadRules)
 
 const formRef = ref()
 const dialogMode = ref('edit')
@@ -394,9 +465,20 @@ function resetFilters() {
   status.value = 'all'
 }
 
-function toggleRule(row) {
-  saveBillingRules(rules.value)
-  ElMessage.success(row.enabled ? '规则已启用' : '规则已停用')
+async function toggleRule(row) {
+  const enabled = row.enabled ? 1 : 0
+  if (demoMode.value) {
+    saveBillingRules(rules.value)
+    ElMessage.success(row.enabled ? '规则已启用' : '规则已停用')
+    return
+  }
+  try {
+    await updateAdminBillingRule(row.id, { enabled })
+    ElMessage.success(row.enabled ? '规则已启用' : '规则已停用')
+  } catch (error) {
+    // 失败时回滚开关状态
+    row.enabled = !row.enabled
+  }
 }
 
 function openCreate() {
@@ -444,6 +526,7 @@ function openEdit(row) {
 }
 
 async function saveRule() {
+  if (saving.value) return
   try {
     await formRef.value.validate()
   } catch (error) {
@@ -462,52 +545,85 @@ async function saveRule() {
     }
   }
 
-  const now = dayjs().format('YYYY-MM-DD HH:mm')
   const tokenPricing = isTokenForm.value
-  const pricing = {
-    price: tokenPricing ? 0 : Number(form.price),
-    priceIn: tokenPricing ? Number(form.priceIn) : 0,
-    priceOut: tokenPricing ? Number(form.priceOut) : 0,
-    priceCachedIn: tokenPricing ? Number(form.priceCachedIn) : 0,
-    cost: tokenPricing ? 0 : Number(form.cost),
-    costIn: tokenPricing ? Number(form.costIn) : 0,
-    costOut: tokenPricing ? Number(form.costOut) : 0,
-    multiplier: Number(form.multiplier),
-    unit: form.unit.trim(),
-    enabled: form.enabled
-  }
+  const payload = toPayload(form, tokenPricing)
 
   if (isCreate.value) {
-    const target = form.target.trim()
-    const model = form.model.trim()
-    const duplicated = rules.value.some(item => item.target === target && item.model === model)
+    const duplicated = rules.value.some(item => item.target === payload.target && item.model === payload.model)
     if (duplicated) {
       ElMessage.warning('该应用与模型的计费规则已存在，请直接编辑已有规则')
       return
     }
-    rules.value.unshift({
-      id: `br-${Date.now()}`,
-      category: form.category,
-      target,
-      model,
-      ...pricing,
-      updatedAt: now
-    })
-    saveBillingRules(rules.value)
-    editVisible.value = false
-    ElMessage.success('计费规则已新增')
+    if (demoMode.value) {
+      rules.value.unshift({
+        id: `br-${Date.now()}`,
+        category: payload.category,
+        target: payload.target,
+        model: payload.model,
+        price: tokenPricing ? 0 : payload.priceIn,
+        priceIn: payload.priceIn,
+        priceOut: payload.priceOut,
+        priceCachedIn: payload.priceCachedIn,
+        cost: tokenPricing ? 0 : payload.costIn,
+        costIn: payload.costIn,
+        costOut: payload.costOut,
+        multiplier: payload.multiplier,
+        unit: payload.unit,
+        enabled: form.enabled,
+        updatedAt: dayjs().format('YYYY-MM-DD HH:mm')
+      })
+      saveBillingRules(rules.value)
+      editVisible.value = false
+      ElMessage.success('计费规则已新增')
+      return
+    }
+    saving.value = true
+    try {
+      await createAdminBillingRule(payload)
+      await loadRules()
+      editVisible.value = false
+      ElMessage.success('计费规则已新增')
+    } catch (error) {
+      // 请求层已统一提示错误
+    } finally {
+      saving.value = false
+    }
     return
   }
 
-  const current = rules.value.find(item => item.id === currentId.value)
-  if (!current) return
-  Object.assign(current, {
-    ...pricing,
-    updatedAt: now
-  })
-  saveBillingRules(rules.value)
-  editVisible.value = false
-  ElMessage.success('计费规则已保存')
+  if (demoMode.value) {
+    const current = rules.value.find(item => item.id === currentId.value)
+    if (!current) return
+    Object.assign(current, {
+      price: tokenPricing ? 0 : payload.priceIn,
+      priceIn: payload.priceIn,
+      priceOut: payload.priceOut,
+      priceCachedIn: payload.priceCachedIn,
+      cost: tokenPricing ? 0 : payload.costIn,
+      costIn: payload.costIn,
+      costOut: payload.costOut,
+      multiplier: payload.multiplier,
+      unit: payload.unit,
+      enabled: form.enabled,
+      updatedAt: dayjs().format('YYYY-MM-DD HH:mm')
+    })
+    saveBillingRules(rules.value)
+    editVisible.value = false
+    ElMessage.success('计费规则已保存')
+    return
+  }
+
+  saving.value = true
+  try {
+    await updateAdminBillingRule(currentId.value, payload)
+    await loadRules()
+    editVisible.value = false
+    ElMessage.success('计费规则已保存')
+  } catch (error) {
+    // 请求层已统一提示错误
+  } finally {
+    saving.value = false
+  }
 }
 
 async function removeRule(row) {
@@ -520,14 +636,26 @@ async function removeRule(row) {
   } catch (error) {
     return
   }
-  rules.value = rules.value.filter(item => item.id !== row.id)
-  saveBillingRules(rules.value)
-  ElMessage.success('计费规则已删除')
+  if (demoMode.value) {
+    rules.value = rules.value.filter(item => item.id !== row.id)
+    saveBillingRules(rules.value)
+    ElMessage.success('计费规则已删除')
+    return
+  }
+  try {
+    await deleteAdminBillingRule(row.id)
+    await loadRules()
+    ElMessage.success('计费规则已删除')
+  } catch (error) {
+    // 请求层已统一提示错误
+  }
 }
 
 const adjustVisible = ref(false)
 const adjustScope = ref('filtered')
 const adjustPercent = ref(10)
+const adjustSubmitting = ref(false)
+const saving = ref(false)
 
 const adjustTargets = computed(() => (adjustScope.value === 'all' ? rules.value : filtered.value))
 
@@ -535,24 +663,75 @@ function openAdjust() {
   adjustVisible.value = true
 }
 
-function applyAdjust() {
+async function applyAdjust() {
   const targets = adjustTargets.value
   if (!targets.length) {
     ElMessage.warning('当前没有可调整的规则')
     return
   }
   const ratio = 1 + Number(adjustPercent.value) / 100
-  targets.forEach(item => {
-    item.price = Number((Number(item.price) * ratio).toFixed(4))
-    item.priceIn = Number((Number(item.priceIn) * ratio).toFixed(4))
-    item.priceOut = Number((Number(item.priceOut) * ratio).toFixed(4))
-    item.priceCachedIn = Number((Number(item.priceCachedIn) * ratio).toFixed(4))
-    // 成本保持不变，调价直接体现为毛利率变化
-    item.updatedAt = dayjs().format('YYYY-MM-DD HH:mm')
-  })
-  saveBillingRules(rules.value)
-  adjustVisible.value = false
-  ElMessage.success(`已调整 ${targets.length} 条规则`)
+
+  if (demoMode.value) {
+    targets.forEach(item => {
+      item.price = Number((Number(item.price) * ratio).toFixed(4))
+      item.priceIn = Number((Number(item.priceIn) * ratio).toFixed(4))
+      item.priceOut = Number((Number(item.priceOut) * ratio).toFixed(4))
+      item.priceCachedIn = Number((Number(item.priceCachedIn) * ratio).toFixed(4))
+      // 成本保持不变，调价直接体现为毛利率变化
+      item.updatedAt = dayjs().format('YYYY-MM-DD HH:mm')
+    })
+    saveBillingRules(rules.value)
+    adjustVisible.value = false
+    ElMessage.success(`已调整 ${targets.length} 条规则`)
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `将按 ${adjustPercent.value > 0 ? '上调' : '下调'} ${Math.abs(Number(adjustPercent.value))}% 调整 ${targets.length} 条规则，确定提交吗？`,
+      '批量调价',
+      { confirmButtonText: '确认调价', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch (error) {
+    return
+  }
+  if (adjustSubmitting.value) {
+    return
+  }
+  adjustSubmitting.value = true
+  try {
+    // 逐条提交并收集结果：部分失败时也要回读服务端真实值，
+    // 否则用户基于旧值重试会对已成功的规则再次乘系数，导致重复调价。
+    const results = await Promise.allSettled(
+      targets.map(item => {
+        const token = isToken(item)
+        return updateAdminBillingRule(
+          item.id,
+          toPayload(
+            {
+              ...item,
+              price: Number((Number(item.price) * ratio).toFixed(4)),
+              priceIn: Number((Number(item.priceIn) * ratio).toFixed(4)),
+              priceOut: Number((Number(item.priceOut) * ratio).toFixed(4)),
+              priceCachedIn: Number((Number(item.priceCachedIn) * ratio).toFixed(4))
+            },
+            token
+          )
+        )
+      })
+    )
+    const failed = results.filter(result => result.status === 'rejected').length
+    await loadRules()
+    if (failed > 0) {
+      // 保留弹窗便于核对，但列表已刷新为服务端真实值
+      ElMessage.error(`${targets.length - failed} 条成功，${failed} 条失败，列表已刷新，请核对后重试`)
+      return
+    }
+    adjustVisible.value = false
+    ElMessage.success(`已调整 ${targets.length} 条规则`)
+  } finally {
+    adjustSubmitting.value = false
+  }
 }
 
 function exportCsv() {
