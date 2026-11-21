@@ -7,6 +7,17 @@
       </el-button>
     </PageHeader>
 
+    <el-alert
+      v-if="!isDev"
+      class="demo-note"
+      style="margin-bottom: 16px"
+      type="info"
+      :closable="false"
+      show-icon
+      title="当前展示的是演示优惠券数据"
+      description="真实兑换码与优惠券接口尚未接入；兑换、领取等写操作在生产环境已禁用。"
+    />
+
     <section class="stat-grid">
       <StatCard label="可用优惠券" :value="available.length" unit="张" icon="Present" hint="可用于充值抵扣" />
       <StatCard label="累计兑换积分" :value="redeemedCredits" icon="Coin" hint="通过兑换码获得" />
@@ -143,6 +154,7 @@ import {
 } from '@/mock/coupons'
 
 const router = useRouter()
+const isDev = import.meta.env.DEV
 const coupons = ref(loadUserCoupons())
 const adminCoupons = ref(loadCoupons())
 const records = ref(loadRedeemRecords())
@@ -216,6 +228,10 @@ function submitRedeem() {
 }
 
 function claim(item) {
+  if (!import.meta.env.DEV) {
+    ElMessage.info('优惠券领取暂未接入后端')
+    return
+  }
   try {
     claimCoupon(item.id)
     coupons.value = loadUserCoupons()
@@ -227,6 +243,10 @@ function claim(item) {
 }
 
 function useCoupon(item) {
+  if (!import.meta.env.DEV) {
+    ElMessage.info('优惠券使用暂未接入后端')
+    return
+  }
   router.push({ path: '/console/wallet', query: { recharge: '1', coupon: item.id } })
 }
 </script>

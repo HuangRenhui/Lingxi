@@ -40,7 +40,7 @@
       </section>
 
       <section class="panel table-panel">
-        <el-table :data="codePaged" size="small">
+        <el-table v-loading="loading" :data="codePaged" size="small">
           <el-table-column label="兑换码" min-width="210">
             <template #default="{ row }">
               <span class="mono code">{{ row.code }}</span>
@@ -59,7 +59,9 @@
             </template>
           </el-table-column>
           <el-table-column prop="expiresAt" label="有效期至" width="130" />
-          <el-table-column prop="createdAt" label="创建时间" width="150" />
+          <el-table-column label="创建时间" width="150">
+            <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
+          </el-table-column>
           <el-table-column label="使用人" width="120">
             <template #default="{ row }">
               <span :class="row.usedBy ? 'mono' : 'muted'">{{ row.usedBy || '—' }}</span>
@@ -95,18 +97,18 @@
           <h3>优惠券列表</h3>
           <span>共 {{ coupons.length }} 个券，关闭后不再发放</span>
         </div>
-        <el-table :data="couponPaged" size="small">
+        <el-table v-loading="loading" :data="couponPaged" size="small">
           <el-table-column prop="name" label="名称" min-width="200" />
           <el-table-column prop="type" label="类型" width="90">
             <template #default="{ row }">
-              <el-tag :type="row.type === '满减' ? 'warning' : 'primary'" size="small" effect="plain">
-                {{ row.type }}
+              <el-tag :type="isFullReduction(row.type) ? 'warning' : 'primary'" size="small" effect="plain">
+                {{ couponTypeLabel(row.type) }}
               </el-tag>
             </template>
           </el-table-column>
           <el-table-column label="面额" width="120">
             <template #default="{ row }">
-              <span class="mono">{{ row.type === '满减' ? `¥${row.value}` : `${row.value * 10} 折` }}</span>
+              <span class="mono">{{ isFullReduction(row.type) ? `¥${row.value}` : `${Number((row.value * 10).toFixed(1))} 折` }}</span>
             </template>
           </el-table-column>
           <el-table-column label="使用门槛" width="120">
@@ -162,7 +164,7 @@
       </div>
       <template #footer>
         <el-button round @click="generateVisible = false">取消</el-button>
-        <el-button round type="primary" @click="generateCodes">确认生成</el-button>
+        <el-button round type="primary" :loading="generating" @click="generateCodes">确认生成</el-button>
       </template>
     </el-dialog>
 
@@ -174,17 +176,17 @@
         <div class="form-row">
           <el-form-item label="类型">
             <el-select v-model="couponForm.type">
-              <el-option label="满减" value="满减" />
-              <el-option label="折扣" value="折扣" />
+              <el-option label="满减" value="FULL_REDUCTION" />
+              <el-option label="折扣" value="DISCOUNT" />
             </el-select>
           </el-form-item>
-          <el-form-item :label="couponForm.type === '满减' ? '减免金额（元）' : '折扣（0-1）'">
+          <el-form-item :label="isFullReduction(couponForm.type) ? '减免金额（元）' : '折扣（0-1）'">
             <el-input-number
               v-model="couponForm.value"
-              :min="couponForm.type === '满减' ? 1 : 0.1"
-              :max="couponForm.type === '满减' ? 1000 : 1"
-              :step="couponForm.type === '满减' ? 1 : 0.05"
-              :precision="couponForm.type === '满减' ? 0 : 2"
+              :min="isFullReduction(couponForm.type) ? 1 : 0.1"
+              :max="isFullReduction(couponForm.type) ? 1000 : 1"
+              :step="isFullReduction(couponForm.type) ? 1 : 0.05"
+              :precision="isFullReduction(couponForm.type) ? 0 : 2"
               controls-position="right"
             />
           </el-form-item>
@@ -209,14 +211,14 @@
       </el-form>
       <template #footer>
         <el-button round @click="couponVisible = false">取消</el-button>
-        <el-button round type="primary" @click="createCoupon">确认创建</el-button>
+        <el-button round type="primary" :loading="creating" @click="createCoupon">确认创建</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import dayjs from 'dayjs'
 import PageHeader from '@/components/PageHeader.vue'
@@ -224,6 +226,13 @@ import StatCard from '@/components/StatCard.vue'
 import TabStrip from '@/components/TabStrip.vue'
 import TablePager from '@/components/TablePager.vue'
 import { loadCoupons, loadRedeemCodes, saveCoupons, saveRedeemCodes } from '@/mock/admin-extra'
+import { createAdminCoupon, listAdminCoupons, updateAdminCoupon } from '@/api/adminCoupon'
+import { fetchAllPages } from '@/utils/pagination'
+import {
+  batchCreateAdminRedeemCodes,
+  listAdminRedeemCodes,
+  updateAdminRedeemCode
+} from '@/api/adminRedeemCode'
 
 const tabs = [
   { key: 'code', label: '兑换码' },
@@ -231,8 +240,12 @@ const tabs = [
 ]
 
 const tab = ref('code')
-const codes = ref(loadRedeemCodes())
-const coupons = ref(loadCoupons())
+const codes = ref([])
+const coupons = ref([])
+const demoMode = ref(false)
+const loading = ref(false)
+const generating = ref(false)
+const creating = ref(false)
 const codeKeyword = ref('')
 const codeStatus = ref('all')
 const generateVisible = ref(false)
@@ -250,12 +263,93 @@ const genForm = reactive({
 
 const couponForm = reactive({
   name: '',
-  type: '满减',
+  type: 'FULL_REDUCTION',
   value: 10,
   threshold: 50,
   total: 200,
   range: [dayjs().toDate(), dayjs().add(30, 'day').toDate()]
 })
+
+async function loadCodeList() {
+  try {
+    // 批量生成可能一次超过 100 条，逐页取完，避免超出的兑换码不可见
+    const page = await fetchAllPages(params => listAdminRedeemCodes(params))
+    if (page) {
+      codes.value = page.list
+      demoMode.value = false
+      if (page.truncated) {
+        ElMessage.warning('兑换码超过 1000 条，仅加载前 1000 条')
+      }
+    } else {
+      codes.value = []
+      demoMode.value = false
+      if (import.meta.env.DEV) {
+        codes.value = loadRedeemCodes()
+        demoMode.value = true
+      }
+    }
+  } catch (error) {
+    codes.value = []
+    demoMode.value = false
+    if (import.meta.env.DEV) {
+      codes.value = loadRedeemCodes()
+      demoMode.value = true
+    }
+  }
+}
+
+async function loadCouponList() {
+  // el-switch 只接受布尔值：后端返回 1/0 时必须归一化，
+  // 否则 Element Plus 会把非 true/false 的 modelValue 强制改成 false 并触发 change，导致打开页面即批量停用优惠券
+  const normalize = list => list.map(item => ({ ...item, enabled: item.enabled === 1 || item.enabled === true }))
+  try {
+    const page = await fetchAllPages(params => listAdminCoupons(params))
+    if (page) {
+      coupons.value = normalize(page.list)
+      demoMode.value = false
+      if (page.truncated) {
+        ElMessage.warning('优惠券超过 1000 条，仅加载前 1000 条')
+      }
+    } else {
+      coupons.value = []
+      demoMode.value = false
+      if (import.meta.env.DEV) {
+        coupons.value = normalize(loadCoupons())
+        demoMode.value = true
+      }
+    }
+  } catch (error) {
+    coupons.value = []
+    demoMode.value = false
+    if (import.meta.env.DEV) {
+      coupons.value = normalize(loadCoupons())
+      demoMode.value = true
+    }
+  }
+}
+
+async function loadAll() {
+  loading.value = true
+  try {
+    await Promise.all([loadCodeList(), loadCouponList()])
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadAll)
+
+function formatTime(value) {
+  return value ? dayjs(value).format('YYYY-MM-DD HH:mm') : '—'
+}
+
+function isFullReduction(type) {
+  return type === 'FULL_REDUCTION' || type === '满减'
+}
+
+function couponTypeLabel(type) {
+  return isFullReduction(type) ? '满减' : '折扣'
+}
 
 const stats = computed(() => ({
   unused: codes.value.filter(item => item.status === 'UNUSED').length,
@@ -271,7 +365,7 @@ const filteredCodes = computed(() => {
   const text = codeKeyword.value.trim().toLowerCase()
   return codes.value.filter(item => {
     const matchKeyword =
-      !text || item.code.toLowerCase().includes(text) || (item.usedBy || '').toLowerCase().includes(text)
+      !text || String(item.code || '').toLowerCase().includes(text) || String(item.usedBy ?? '').toLowerCase().includes(text)
     const matchStatus = codeStatus.value === 'all' || item.status === codeStatus.value
     return matchKeyword && matchStatus
   })
@@ -306,7 +400,8 @@ function openGenerate() {
   generateVisible.value = true
 }
 
-function generateCodes() {
+async function generateCodes() {
+  if (generating.value) return
   const { amount, count, prefix } = genForm
   if (!amount || !count) {
     ElMessage.warning('请填写面额与数量')
@@ -323,21 +418,37 @@ function generateCodes() {
     return
   }
   const expiresAt = expires.format('YYYY-MM-DD')
-  const created = Array.from({ length: count }, (_, index) => {
-    const token = Math.random().toString(36).slice(2, 7).toUpperCase()
-    return {
-      code: `${prefix || 'LX'}-${token}-${amount}-${index + 1}`,
-      amount,
-      status: 'UNUSED',
-      expiresAt,
-      createdAt: dayjs().format('YYYY-MM-DD HH:mm'),
-      usedBy: ''
-    }
-  })
-  codes.value = [...created, ...codes.value]
-  saveRedeemCodes(codes.value)
-  generateVisible.value = false
-  ElMessage.success(`已生成 ${count} 个兑换码`)
+
+  if (demoMode.value) {
+    const created = Array.from({ length: count }, (_, index) => {
+      const token = Math.random().toString(36).slice(2, 7).toUpperCase()
+      return {
+        code: `${prefix || 'LX'}-${token}-${amount}-${index + 1}`,
+        amount,
+        status: 'UNUSED',
+        expiresAt,
+        createdAt: dayjs().format('YYYY-MM-DD HH:mm'),
+        usedBy: ''
+      }
+    })
+    codes.value = [...created, ...codes.value]
+    saveRedeemCodes(codes.value)
+    generateVisible.value = false
+    ElMessage.success(`已生成 ${count} 个兑换码`)
+    return
+  }
+
+  generating.value = true
+  try {
+    await batchCreateAdminRedeemCodes({ amount, count, expiresAt, prefix })
+    await loadCodeList()
+    generateVisible.value = false
+    ElMessage.success(`已生成 ${count} 个兑换码`)
+  } catch (error) {
+    // 请求层已统一提示错误
+  } finally {
+    generating.value = false
+  }
 }
 
 function copyCode(row) {
@@ -351,21 +462,42 @@ function copyCode(row) {
     .catch(() => ElMessage.warning('复制失败，请手动选择'))
 }
 
-function voidCode(row) {
-  row.status = 'VOID'
-  saveRedeemCodes(codes.value)
-  ElMessage.success('兑换码已作废')
+async function voidCode(row) {
+  if (demoMode.value) {
+    row.status = 'VOID'
+    saveRedeemCodes(codes.value)
+    ElMessage.success('兑换码已作废')
+    return
+  }
+  try {
+    await updateAdminRedeemCode(row.id, { status: 'VOID' })
+    await loadCodeList()
+    ElMessage.success('兑换码已作废')
+  } catch (error) {
+    // 请求层已统一提示错误
+  }
 }
 
-function toggleCoupon(row) {
-  saveCoupons(coupons.value)
-  ElMessage.success(row.enabled ? `「${row.name}」已启用` : `「${row.name}」已停用`)
+async function toggleCoupon(row) {
+  const enabled = row.enabled ? 1 : 0
+  if (demoMode.value) {
+    saveCoupons(coupons.value)
+    ElMessage.success(row.enabled ? `「${row.name}」已启用` : `「${row.name}」已停用`)
+    return
+  }
+  try {
+    await updateAdminCoupon(row.id, { enabled })
+    ElMessage.success(row.enabled ? `「${row.name}」已启用` : `「${row.name}」已停用`)
+  } catch (error) {
+    // 失败时回滚开关状态，避免界面与后端不一致
+    row.enabled = enabled !== 1
+  }
 }
 
 function openCoupon() {
   Object.assign(couponForm, {
     name: '',
-    type: '满减',
+    type: 'FULL_REDUCTION',
     value: 10,
     threshold: 50,
     total: 200,
@@ -374,7 +506,8 @@ function openCoupon() {
   couponVisible.value = true
 }
 
-function createCoupon() {
+async function createCoupon() {
+  if (creating.value) return
   if (!couponForm.name.trim()) {
     ElMessage.warning('请填写优惠券名称')
     return
@@ -383,24 +516,35 @@ function createCoupon() {
     ElMessage.warning('请选择有效期')
     return
   }
-  coupons.value = [
-    {
-      id: `cp-${Date.now()}`,
-      name: couponForm.name.trim(),
-      type: couponForm.type,
-      value: couponForm.value,
-      threshold: couponForm.threshold,
-      validFrom: dayjs(couponForm.range[0]).format('YYYY-MM-DD'),
-      validTo: dayjs(couponForm.range[1]).format('YYYY-MM-DD'),
-      claimed: 0,
-      total: couponForm.total,
-      enabled: true
-    },
-    ...coupons.value
-  ]
-  saveCoupons(coupons.value)
-  couponVisible.value = false
-  ElMessage.success('优惠券已创建')
+  const payload = {
+    name: couponForm.name.trim(),
+    type: couponForm.type,
+    value: couponForm.value,
+    threshold: couponForm.threshold,
+    total: couponForm.total,
+    validFrom: dayjs(couponForm.range[0]).format('YYYY-MM-DD'),
+    validTo: dayjs(couponForm.range[1]).format('YYYY-MM-DD')
+  }
+
+  if (demoMode.value) {
+    coupons.value = [{ id: `cp-${Date.now()}`, ...payload, claimed: 0, enabled: true }, ...coupons.value]
+    saveCoupons(coupons.value)
+    couponVisible.value = false
+    ElMessage.success('优惠券已创建')
+    return
+  }
+
+  creating.value = true
+  try {
+    await createAdminCoupon(payload)
+    await loadCouponList()
+    couponVisible.value = false
+    ElMessage.success('优惠券已创建')
+  } catch (error) {
+    // 请求层已统一提示错误
+  } finally {
+    creating.value = false
+  }
 }
 </script>
 
