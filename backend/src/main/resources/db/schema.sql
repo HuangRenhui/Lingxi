@@ -1,5 +1,5 @@
 -- 灵犀初始化表结构（MySQL 8.0）
--- 说明：初始化阶段包含已落地模块（B1 用户、B7 任务、AI 应用、API Key、通知、设备、技能、连接器、B8 产物、B3 订单、B4 钱包、B5 订阅）所需表。
+-- 说明：初始化阶段包含已落地模块（B1 用户、B7 任务、AI 应用、API Key、通知、设备、技能、连接器、B8 产物、B3 订单、B4 钱包、B5 订阅、B10 运营配置与用户优惠券）所需表。
 -- 其余 B2/B6/B9-B12 表随模块迭代补充，规划见 docs/数据库设计.md。
 
 SET NAMES utf8mb4;
@@ -185,7 +185,7 @@ CREATE TABLE IF NOT EXISTS artifact (
     size_bytes BIGINT       NOT NULL DEFAULT 0 COMMENT '文件大小（字节）',
     favorite   TINYINT      NOT NULL DEFAULT 0 COMMENT '收藏：1 是 / 0 否',
     trashed    TINYINT      NOT NULL DEFAULT 0 COMMENT '回收站：1 是 / 0 否',
-    status     VARCHAR(16)  NOT NULL DEFAULT 'APPROVED' COMMENT 'PENDING / APPROVED / REJECTED',
+    status     VARCHAR(16)  NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING / APPROVED / REJECTED',
     created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     deleted    TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除',
@@ -298,3 +298,118 @@ CREATE TABLE IF NOT EXISTS user_subscription (
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_general_ci COMMENT = '用户订阅与历史';
+
+CREATE TABLE IF NOT EXISTS marketing_coupon (
+    id         BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    name       VARCHAR(64)   NOT NULL COMMENT '优惠券名称',
+    type       VARCHAR(16)   NOT NULL DEFAULT 'FULL_REDUCTION' COMMENT 'FULL_REDUCTION 满减 / DISCOUNT 折扣',
+    value      DECIMAL(12, 2) NOT NULL DEFAULT 0 COMMENT '面额：满减为金额，折扣为 0-1 折扣率',
+    threshold  DECIMAL(12, 2) NOT NULL DEFAULT 0 COMMENT '使用门槛，0 为无门槛',
+    total      INT           NOT NULL DEFAULT 0 COMMENT '发放总量',
+    claimed    INT           NOT NULL DEFAULT 0 COMMENT '已领取数量',
+    valid_from DATE                   DEFAULT NULL COMMENT '有效期开始',
+    valid_to   DATE                   DEFAULT NULL COMMENT '有效期结束',
+    enabled    TINYINT       NOT NULL DEFAULT 1 COMMENT '启用：1 是 / 0 否',
+    created_at DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted    TINYINT       NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    PRIMARY KEY (id),
+    KEY idx_marketing_coupon_enabled (enabled, deleted)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci COMMENT = '营销优惠券';
+
+CREATE TABLE IF NOT EXISTS redeem_code (
+    id         BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    code       VARCHAR(32)   NOT NULL COMMENT '兑换码',
+    amount     DECIMAL(12, 2) NOT NULL COMMENT '面额（积分）',
+    status     VARCHAR(16)   NOT NULL DEFAULT 'UNUSED' COMMENT 'UNUSED / USED / VOID',
+    expires_at DATE                   DEFAULT NULL COMMENT '有效期至',
+    used_by    BIGINT                 DEFAULT NULL COMMENT '使用人',
+    used_at    DATETIME               DEFAULT NULL COMMENT '使用时间',
+    created_at DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    deleted    TINYINT       NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_redeem_code_code (code),
+    KEY idx_redeem_code_status (status, deleted)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci COMMENT = '积分兑换码';
+
+CREATE TABLE IF NOT EXISTS billing_rule (
+    id              BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    category        VARCHAR(16)    NOT NULL COMMENT '计费类型：对话 / 图片 / 视频 / 音乐',
+    target          VARCHAR(64)    NOT NULL COMMENT '应用名称',
+    model           VARCHAR(64)    NOT NULL COMMENT '模型名称',
+    unit            VARCHAR(32)    NOT NULL COMMENT '计费单位',
+    price_in        DECIMAL(18, 6) NOT NULL DEFAULT 0 COMMENT '输入单价（积分）',
+    price_out       DECIMAL(18, 6) NOT NULL DEFAULT 0 COMMENT '输出单价（积分）',
+    price_cached_in DECIMAL(18, 6) NOT NULL DEFAULT 0 COMMENT '缓存输入单价（积分）',
+    cost_in         DECIMAL(18, 6) NOT NULL DEFAULT 0 COMMENT '输入成本（积分）',
+    cost_out        DECIMAL(18, 6) NOT NULL DEFAULT 0 COMMENT '输出成本（积分）',
+    multiplier      DECIMAL(8, 2)  NOT NULL DEFAULT 1 COMMENT '计价倍率',
+    enabled         TINYINT        NOT NULL DEFAULT 1 COMMENT '启用：1 是 / 0 否',
+    created_at      DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at      DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted         TINYINT        NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_billing_rule_target (target, model, deleted)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci COMMENT = '计费规则';
+
+CREATE TABLE IF NOT EXISTS moderation_report (
+    id          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    target_type VARCHAR(16)  NOT NULL COMMENT '举报对象类型：IMAGE / VIDEO / ARTIFACT / TEXT',
+    target_id   BIGINT       NOT NULL COMMENT '举报对象 ID',
+    reason      VARCHAR(255) NOT NULL COMMENT '举报原因',
+    reporter_id BIGINT                DEFAULT NULL COMMENT '举报人',
+    status      VARCHAR(16)  NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING / RESOLVED / REJECTED',
+    result      VARCHAR(255)          DEFAULT NULL COMMENT '处理结果',
+    created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted     TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    PRIMARY KEY (id),
+    KEY idx_moderation_report_status (status, deleted),
+    KEY idx_moderation_report_target (target_type, target_id, deleted)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci COMMENT = '内容举报';
+
+CREATE TABLE IF NOT EXISTS user_coupon (
+    id         BIGINT      NOT NULL AUTO_INCREMENT COMMENT '主键',
+    user_id    BIGINT      NOT NULL COMMENT '领取用户',
+    coupon_id  BIGINT      NOT NULL COMMENT '优惠券模板 ID',
+    status     VARCHAR(16) NOT NULL DEFAULT 'UNUSED' COMMENT 'UNUSED / USED / EXPIRED',
+    claimed_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '领取时间',
+    used_at    DATETIME             DEFAULT NULL COMMENT '核销时间',
+    order_no   VARCHAR(32)          DEFAULT NULL COMMENT '核销订单号',
+    created_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    -- 同一用户同一张券只能领取一次，防重复领取与并发超发
+    UNIQUE KEY uk_user_coupon_user_coupon (user_id, coupon_id),
+    KEY idx_user_coupon_user_status (user_id, status),
+    KEY idx_user_coupon_coupon (coupon_id, status),
+    CONSTRAINT fk_user_coupon_user FOREIGN KEY (user_id) REFERENCES sys_user (id),
+    CONSTRAINT fk_user_coupon_coupon FOREIGN KEY (coupon_id) REFERENCES marketing_coupon (id)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci COMMENT = '用户优惠券领取与核销';
+
+CREATE TABLE IF NOT EXISTS moderation_sensitive_word (
+    id         BIGINT      NOT NULL AUTO_INCREMENT COMMENT '主键',
+    word       VARCHAR(64) NOT NULL COMMENT '敏感词',
+    category   VARCHAR(32) NOT NULL DEFAULT '其他' COMMENT '分类',
+    level      VARCHAR(8)  NOT NULL DEFAULT '中' COMMENT '级别：高 / 中 / 低',
+    hits       INT         NOT NULL DEFAULT 0 COMMENT '命中次数',
+    enabled    TINYINT     NOT NULL DEFAULT 1 COMMENT '是否启用',
+    created_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted    TINYINT     NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    PRIMARY KEY (id),
+    KEY idx_sensitive_word_word (word, deleted),
+    KEY idx_sensitive_word_category (category, deleted)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci COMMENT = '内容审核敏感词';
