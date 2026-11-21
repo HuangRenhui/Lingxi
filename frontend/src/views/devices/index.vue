@@ -164,6 +164,10 @@ function randomCode() {
 }
 
 function openPairing() {
+  if (!import.meta.env.DEV) {
+    ElMessage.info('浏览器设备配对暂未接入后端')
+    return
+  }
   code.value = randomCode()
   seconds.value = 600
   pairingVisible.value = true
@@ -190,6 +194,12 @@ async function copyCode() {
 }
 
 function confirmPairing() {
+  if (!import.meta.env.DEV) {
+    ElMessage.info('浏览器设备配对暂未接入后端')
+    pairingVisible.value = false
+    stopCountdown()
+    return
+  }
   const exists = devices.value.some(item => item.name === 'Windows · Chrome')
   if (exists) {
     const target = devices.value.find(item => item.name === 'Windows · Chrome')
@@ -218,6 +228,10 @@ function confirmPairing() {
 }
 
 function renew(row) {
+  if (!import.meta.env.DEV) {
+    ElMessage.info('设备状态刷新暂未接入后端')
+    return
+  }
   row.lastActiveAt = dayjs().format('YYYY-MM-DD HH:mm')
   row.status = 'ONLINE'
   saveDevices()
@@ -225,6 +239,10 @@ function renew(row) {
 }
 
 async function unbind(row) {
+  if (!import.meta.env.DEV) {
+    ElMessage.info('设备解绑暂未接入后端')
+    return
+  }
   try {
     await ElMessageBox.confirm(`解除绑定后 ${row.name} 将无法执行本机任务，确认继续？`, '解除绑定', {
       type: 'warning',

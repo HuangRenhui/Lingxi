@@ -8,8 +8,10 @@ import com.lingxi.dto.AdminUserCreateRequest;
 import com.lingxi.dto.AdminUserUpdateRequest;
 import com.lingxi.entity.SysUser;
 import com.lingxi.mapper.SysUserMapper;
+import com.lingxi.security.JwtTokenProvider;
 import com.lingxi.security.LoginUser;
 import com.lingxi.security.SecurityUtils;
+import com.lingxi.security.TokenBlacklistService;
 import com.lingxi.service.AdminUserService;
 import com.lingxi.vo.AdminUserVO;
 import lombok.RequiredArgsConstructor;
@@ -32,17 +34,22 @@ public class AdminUserServiceImpl implements AdminUserService {
 
     private final SysUserMapper sysUserMapper;
     private final PasswordEncoder passwordEncoder;
+    private final TokenBlacklistService tokenBlacklistService;
+    private final JwtTokenProvider jwtTokenProvider;
 
     @Override
     public List<AdminUserVO> list(int page, int size, String keyword) {
         requireAdmin();
         long current = Math.max(1, page);
         long pageSize = Math.min(Math.max(1, size), MAX_PAGE_SIZE);
+        String likeKeyword = StringUtils.hasText(keyword)
+                ? keyword.trim().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                : null;
         LambdaQueryWrapper<SysUser> wrapper = new LambdaQueryWrapper<SysUser>()
-                .and(StringUtils.hasText(keyword), item -> item
-                        .like(SysUser::getUsername, keyword)
+                .and(likeKeyword != null, item -> item
+                        .like(SysUser::getUsername, likeKeyword)
                         .or()
-                        .like(SysUser::getNickname, keyword))
+                        .like(SysUser::getNickname, likeKeyword))
                 .orderByDesc(SysUser::getId);
         Page<SysUser> result = sysUserMapper.selectPage(new Page<>(current, pageSize), wrapper);
         return result.getRecords().stream().map(this::toVO).collect(Collectors.toList());
@@ -86,28 +93,56 @@ public class AdminUserServiceImpl implements AdminUserService {
         SysUser user = getUser(id);
         LoginUser current = SecurityUtils.getLoginUser();
 
+        // 只写入本次请求涉及的字段，避免整实体回写覆盖并发修改（如另一个请求刚改过的昵称）
+        SysUser patch = new SysUser();
+        patch.setId(id);
+        boolean credentialChanged = false;
+        boolean changed = false;
         if (request.getPassword() != null) {
-            user.setPassword(passwordEncoder.encode(request.getPassword()));
+            patch.setPassword(passwordEncoder.encode(request.getPassword()));
+            credentialChanged = true;
+            changed = true;
         }
         if (request.getNickname() != null) {
-            user.setNickname(request.getNickname().trim());
+            String nickname = request.getNickname().trim();
+            if (nickname.isEmpty()) {
+                throw new BusinessException(ResultCode.PARAM_ERROR.getCode(), "昵称不能为空白");
+            }
+            patch.setNickname(nickname);
+            changed = true;
         }
         if (request.getRole() != null) {
             // 防止管理员把自己降级后失去管理入口
             if (id.equals(current.getId()) && !"ADMIN".equals(request.getRole())) {
                 throw new BusinessException(ResultCode.SELF_OPERATION_FORBIDDEN);
             }
-            user.setRole(request.getRole());
+            patch.setRole(request.getRole());
+            changed = true;
         }
         if (request.getStatus() != null) {
             if (id.equals(current.getId()) && request.getStatus() == 0) {
                 throw new BusinessException(ResultCode.SELF_OPERATION_FORBIDDEN);
             }
-            user.setStatus(request.getStatus());
+            patch.setStatus(request.getStatus());
+            // 禁用后必须让已签发的令牌立即失效，否则被停用账号仍可操作到令牌过期
+            if (request.getStatus() == 0) {
+                credentialChanged = true;
+            }
+            changed = true;
         }
 
-        sysUserMapper.updateById(user);
-        return toVO(sysUserMapper.selectById(id));
+        if (!changed) {
+            return toVO(user);
+        }
+        sysUserMapper.updateById(patch);
+        if (credentialChanged) {
+            revokeTokens(id);
+        }
+        SysUser saved = sysUserMapper.selectById(id);
+        if (saved == null) {
+            throw new BusinessException(ResultCode.USER_NOT_FOUND);
+        }
+        return toVO(saved);
     }
 
     @Override
@@ -119,6 +154,14 @@ public class AdminUserServiceImpl implements AdminUserService {
         }
         getUser(id);
         sysUserMapper.deleteById(id);
+        revokeTokens(id);
+    }
+
+    /**
+     * 让该用户已签发的令牌立即失效；TTL 覆盖令牌最长剩余有效期。
+     */
+    private void revokeTokens(Long userId) {
+        tokenBlacklistService.invalidateUserTokens(userId, jwtTokenProvider.getExpireMinutes() * 60 + 60);
     }
 
     /**

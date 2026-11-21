@@ -17,6 +17,11 @@ public interface UserDeviceService {
     List<DeviceVO> listMine(int page, int size);
 
     /**
+     * 查询设备详情，仅限本人。
+     */
+    DeviceVO get(Long id);
+
+    /**
      * 新增一条设备记录。
      */
     DeviceVO create(DeviceCreateRequest request);

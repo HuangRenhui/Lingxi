@@ -43,6 +43,15 @@ public class UserDeviceController {
     }
 
     /**
+     * 设备详情。
+     */
+    @GetMapping("/{id}")
+    @Operation(summary = "设备详情")
+    public Result<DeviceVO> get(@PathVariable Long id) {
+        return Result.success(userDeviceService.get(id));
+    }
+
+    /**
      * 新增设备记录。
      */
     @PostMapping

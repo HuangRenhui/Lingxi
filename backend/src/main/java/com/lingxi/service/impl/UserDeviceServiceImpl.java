@@ -1,6 +1,7 @@
 package com.lingxi.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lingxi.common.BusinessException;
 import com.lingxi.common.ResultCode;
@@ -27,6 +28,8 @@ import java.util.stream.Collectors;
 public class UserDeviceServiceImpl implements UserDeviceService {
 
     private static final int MAX_PAGE_SIZE = 100;
+    /** 单用户设备数量上限，避免无限注册撑爆列表。 */
+    private static final int MAX_DEVICE_COUNT = 20;
 
     private final UserDeviceMapper userDeviceMapper;
 
@@ -43,6 +46,11 @@ public class UserDeviceServiceImpl implements UserDeviceService {
     }
 
     @Override
+    public DeviceVO get(Long id) {
+        return toVO(getOwnedDevice(id));
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public DeviceVO create(DeviceCreateRequest request) {
         UserDevice device = new UserDevice();
@@ -52,7 +60,14 @@ public class UserDeviceServiceImpl implements UserDeviceService {
         device.setBrowser(request.getBrowser());
         device.setIp(request.getIp());
         device.setLocation(request.getLocation());
-        device.setCurrentFlag(0);
+        // 首个设备默认为当前设备，否则页面的「当前设备」标识永远为空
+        Long existing = userDeviceMapper.selectCount(new LambdaQueryWrapper<UserDevice>()
+                .eq(UserDevice::getUserId, SecurityUtils.getUserId()));
+        if (existing != null && existing >= MAX_DEVICE_COUNT) {
+            throw new BusinessException(ResultCode.PARAM_ERROR.getCode(),
+                    "设备数量已达上限，请先移除其他设备");
+        }
+        device.setCurrentFlag(existing == null || existing == 0 ? 1 : 0);
         device.setLastActiveAt(LocalDateTime.now());
         userDeviceMapper.insert(device);
         return toVO(userDeviceMapper.selectById(device.getId()));
@@ -76,8 +91,21 @@ public class UserDeviceServiceImpl implements UserDeviceService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void delete(Long id) {
-        getOwnedDevice(id);
+        UserDevice device = getOwnedDevice(id);
         userDeviceMapper.deleteById(id);
+        // 删除的是当前设备时，把最近活跃的剩余设备提升为当前设备
+        if (Integer.valueOf(1).equals(device.getCurrentFlag())) {
+            UserDevice next = userDeviceMapper.selectOne(new LambdaQueryWrapper<UserDevice>()
+                    .eq(UserDevice::getUserId, device.getUserId())
+                    .orderByDesc(UserDevice::getLastActiveAt)
+                    .orderByDesc(UserDevice::getId)
+                    .last("LIMIT 1"));
+            if (next != null) {
+                userDeviceMapper.update(null, new LambdaUpdateWrapper<UserDevice>()
+                        .eq(UserDevice::getId, next.getId())
+                        .set(UserDevice::getCurrentFlag, 1));
+            }
+        }
     }
 
     /**
