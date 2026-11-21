@@ -1,6 +1,6 @@
 import request from '@/utils/request'
 
-export function listConnectors({ page = 1, size = 200 } = {}) {
+export function listConnectors({ page = 1, size = 100 } = {}) {
   return request.get('/connectors', { params: { page, size } })
 }
 

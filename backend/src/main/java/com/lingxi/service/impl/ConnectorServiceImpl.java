@@ -1,6 +1,7 @@
 package com.lingxi.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lingxi.common.BusinessException;
 import com.lingxi.common.ResultCode;
@@ -58,6 +59,7 @@ public class ConnectorServiceImpl implements ConnectorService {
         // 未指定接入类型时按 HTTP 处理
         server.setServerType(StringUtils.hasText(request.getServerType()) ? request.getServerType() : "HTTP");
         server.setEndpoint(trimToNull(request.getEndpoint()));
+        validateEndpoint(server.getServerType(), server.getEndpoint());
         // 新建连接器默认未连接，由前端连接操作切换状态
         server.setStatus(0);
         mcpServerMapper.insert(server);
@@ -89,9 +91,56 @@ public class ConnectorServiceImpl implements ConnectorService {
         if (request.getStatus() != null) {
             server.setStatus(request.getStatus());
         }
+        validateEndpoint(server.getServerType(), server.getEndpoint());
 
-        mcpServerMapper.updateById(server);
+        // 用 UpdateWrapper 显式写入 null，保证「传入空串清空简介/地址」真实生效
+        LambdaUpdateWrapper<AiMcpServer> update =
+                new LambdaUpdateWrapper<AiMcpServer>().eq(AiMcpServer::getId, id);
+        boolean changed = false;
+        if (request.getName() != null) {
+            update.set(AiMcpServer::getName, server.getName());
+            changed = true;
+        }
+        if (request.getDescription() != null) {
+            update.set(AiMcpServer::getDescription, server.getDescription());
+            changed = true;
+        }
+        if (request.getServerType() != null) {
+            update.set(AiMcpServer::getServerType, server.getServerType());
+            changed = true;
+        }
+        if (request.getEndpoint() != null) {
+            update.set(AiMcpServer::getEndpoint, server.getEndpoint());
+            changed = true;
+        }
+        if (request.getStatus() != null) {
+            update.set(AiMcpServer::getStatus, server.getStatus());
+            changed = true;
+        }
+        if (!changed) {
+            return toVO(server);
+        }
+        mcpServerMapper.update(null, update);
         return toVO(mcpServerMapper.selectById(id));
+    }
+
+    /**
+     * 校验连接地址：STDIO 为启动命令，禁止控制字符与 shell 元字符；HTTP/SSE 必须是 http(s) 地址。
+     */
+    private void validateEndpoint(String serverType, String endpoint) {
+        if (!StringUtils.hasText(endpoint)) {
+            return;
+        }
+        if ("STDIO".equals(serverType)) {
+            // 换行/回车/Tab 等控制字符可绕过原来的黑名单形成命令分隔，必须一并拒绝
+            if (endpoint.matches("(?s).*[\\u0000-\\u001F\\u007F;&|`$><].*")) {
+                throw new BusinessException(ResultCode.PARAM_ERROR.getCode(), "STDIO 命令包含非法字符");
+            }
+            return;
+        }
+        if (!endpoint.startsWith("http://") && !endpoint.startsWith("https://")) {
+            throw new BusinessException(ResultCode.PARAM_ERROR.getCode(), "HTTP/SSE 地址必须以 http:// 或 https:// 开头");
+        }
     }
 
     @Override

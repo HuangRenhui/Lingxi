@@ -21,7 +21,14 @@
           @click="currentName = item.name"
         >
           <span class="connector-badge" :style="{ background: item.plain ? 'transparent' : item.color }">
-            <img class="connector-logo" :class="{ plain: item.plain }" :src="connectorIcons[item.icon]" :alt="item.name" />
+            <img
+              v-if="item.icon && connectorIcons[item.icon]"
+              class="connector-logo"
+              :class="{ plain: item.plain }"
+              :src="connectorIcons[item.icon]"
+              :alt="item.name"
+            />
+            <span v-else class="connector-initial">{{ item.name.slice(0, 1) }}</span>
           </span>
           <span class="connector-name">{{ item.name }}</span>
           <span class="connector-status" :class="{ on: connected.includes(item.name) }">
@@ -39,33 +46,50 @@
         <header class="detail-head">
           <div class="detail-brand">
             <span class="connector-badge large" :style="{ background: current.plain ? 'transparent' : current.color }">
-              <img class="connector-logo" :class="{ plain: current.plain }" :src="connectorIcons[current.icon]" :alt="current.name" />
+              <img
+                v-if="current.icon && connectorIcons[current.icon]"
+                class="connector-logo"
+                :class="{ plain: current.plain }"
+                :src="connectorIcons[current.icon]"
+                :alt="current.name"
+              />
+              <span v-else class="connector-initial">{{ current.name.slice(0, 1) }}</span>
             </span>
             <div>
               <h2>{{ current.name }}</h2>
               <p>{{ current.summary }}</p>
             </div>
           </div>
-          <el-button
-            round
-            :type="isConnected ? 'success' : 'primary'"
-            :plain="isConnected"
-            @click="toggleConnect(current)"
-          >
-            {{ isConnected ? '已连接' : '连接' }}
-          </el-button>
+          <div class="detail-actions">
+            <el-button
+              v-if="findRecord(current.name)"
+              link
+              type="danger"
+              @click="removeConnector(current)"
+            >
+              移除
+            </el-button>
+            <el-button
+              round
+              :type="isConnected ? 'success' : 'primary'"
+              :plain="isConnected"
+              @click="toggleConnect(current)"
+            >
+              {{ isConnected ? '已连接' : '连接' }}
+            </el-button>
+          </div>
         </header>
 
         <section class="detail-section">
           <h3>简介</h3>
-          <p v-for="line in current.detail" :key="line" class="detail-line">{{ line }}</p>
+          <p v-for="line in currentDetail" :key="line" class="detail-line">{{ line }}</p>
         </section>
 
         <section class="detail-section">
-          <h3>试一试 <span class="count">3</span></h3>
+          <h3>试一试 <span class="count">{{ currentExamples.length }}</span></h3>
           <p class="section-hint">连接后即可使用这些示例词</p>
           <div class="examples">
-            <div v-for="example in current.examples" :key="example" class="example-row">
+            <div v-for="example in currentExamples" :key="example" class="example-row">
               <el-icon><ChatDotRound /></el-icon>
               <span>{{ example }}</span>
               <el-icon class="lock"><Lock /></el-icon>
@@ -77,7 +101,7 @@
           <h3>工具权限</h3>
           <p class="section-hint">连接后即可查看该服务提供的工具。</p>
           <div class="tool-tags">
-            <el-tag v-for="tool in current.tools" :key="tool" effect="plain" round>{{ tool }}</el-tag>
+            <el-tag v-for="tool in currentTools" :key="tool" effect="plain" round>{{ tool }}</el-tag>
           </div>
         </section>
       </section>
@@ -93,7 +117,14 @@
           @click="pickConnector(item)"
         >
           <span class="connector-badge" :style="{ background: item.plain ? 'transparent' : item.color }">
-            <img class="connector-logo" :class="{ plain: item.plain }" :src="connectorIcons[item.icon]" :alt="item.name" />
+            <img
+              v-if="item.icon && connectorIcons[item.icon]"
+              class="connector-logo"
+              :class="{ plain: item.plain }"
+              :src="connectorIcons[item.icon]"
+              :alt="item.name"
+            />
+            <span v-else class="connector-initial">{{ item.name.slice(0, 1) }}</span>
           </span>
           <div class="all-copy">
             <strong>{{ item.name }}</strong>
@@ -117,10 +148,12 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { computed, onMounted, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { createConnector, deleteConnector, listConnectors, updateConnector } from '@/api/connector'
 import { readJson, writeJson } from '@/utils/storage'
 import { matchKeyword } from '@/utils/text'
+import { fetchAllPages } from '@/utils/pagination'
 import PageHeader from '@/components/PageHeader.vue'
 import openaiIcon from '@/assets/connector-icons/openai.svg'
 import sunoIcon from '@/assets/connector-icons/suno.svg'
@@ -160,7 +193,7 @@ const connectorIcons = {
   sentry: sentryIcon
 }
 
-const connectors = [
+const catalog = [
   {
     name: 'OpenAI',
     icon: 'openai',
@@ -318,41 +351,158 @@ const connectors = [
   }
 ]
 
-const connected = ref(loadConnected())
+const records = ref([])
+const demoMode = ref(false)
+const demoConnected = ref(loadDemoConnected())
 const keyword = ref('')
-const currentName = ref(connectors[0].name)
+const currentName = ref('')
 const allVisible = ref(false)
+
+/**
+ * 后端连接器转换为页面条目：目录内已有的沿用目录展示信息，
+ * 自定义连接器只展示名称与简介。
+ */
+function toPageItem(record) {
+  const known = catalog.find(item => item.name === record.name)
+  if (known) return known
+  return {
+    id: record.id,
+    name: record.name,
+    color: '#3b82f6',
+    summary: record.description || '自定义连接器',
+    detail: record.description ? [record.description] : [],
+    examples: [],
+    tools: [],
+    serverType: record.serverType,
+    endpoint: record.endpoint
+  }
+}
+
+const connectors = computed(() => {
+  const custom = records.value
+    .filter(record => !catalog.some(item => item.name === record.name))
+    .map(toPageItem)
+  return [...catalog, ...custom]
+})
+
+const connected = computed(() =>
+  demoMode.value
+    ? demoConnected.value
+    : records.value.filter(record => record.status === 1).map(record => record.name)
+)
 
 const filteredConnectors = computed(() => {
   const key = keyword.value.trim().toLowerCase()
-  return connectors.filter(item => matchKeyword(key, item.name))
+  return connectors.value.filter(item => matchKeyword(key, item.name))
 })
 
-const current = computed(() => connectors.find(item => item.name === currentName.value) || connectors[0])
+const current = computed(() => {
+  return connectors.value.find(item => item.name === currentName.value) || connectors.value[0] || null
+})
+
+const currentDetail = computed(() => current.value?.detail || [])
+const currentExamples = computed(() => current.value?.examples || [])
+const currentTools = computed(() => current.value?.tools || [])
 
 function pickConnector(item) {
   currentName.value = item.name
   allVisible.value = false
 }
-const isConnected = computed(() => connected.value.includes(current.value.name))
 
-function loadConnected() {
+const isConnected = computed(
+  () => Boolean(current.value) && connected.value.includes(current.value.name)
+)
+
+function findRecord(name) {
+  return records.value.find(record => record.name === name) || null
+}
+
+function loadDemoConnected() {
   const cached = readJson(STORAGE_KEY, [])
   return Array.isArray(cached) ? cached : []
 }
 
-function toggleConnect(item) {
-  if (connected.value.includes(item.name)) {
-    connected.value = connected.value.filter(name => name !== item.name)
-    ElMessage.success(`已断开 ${item.name}`)
-  } else {
-    connected.value.push(item.name)
-    ElMessage.success(`已连接 ${item.name}`)
-  }
-  if (!writeJson(STORAGE_KEY, connected.value)) {
+function persistDemoConnected() {
+  if (!writeJson(STORAGE_KEY, demoConnected.value)) {
     ElMessage.warning('本地存储不可用，连接状态仅保留到刷新前')
   }
 }
+
+async function loadConnectors() {
+  try {
+    const result = await fetchAllPages(params => listConnectors(params))
+    if (!result) {
+      // 只有开发环境允许进入演示连接状态
+      demoMode.value = Boolean(import.meta.env.DEV)
+      records.value = []
+    } else {
+      demoMode.value = false
+      records.value = result.list
+    }
+  } catch (error) {
+    demoMode.value = false
+    records.value = []
+  }
+  currentName.value = connectors.value[0]?.name || ''
+}
+
+async function toggleConnect(item) {
+  if (demoMode.value) {
+    if (demoConnected.value.includes(item.name)) {
+      demoConnected.value = demoConnected.value.filter(name => name !== item.name)
+      ElMessage.success(`已断开 ${item.name}`)
+    } else {
+      demoConnected.value = [...demoConnected.value, item.name]
+      ElMessage.success(`已连接 ${item.name}`)
+    }
+    persistDemoConnected()
+    return
+  }
+
+  try {
+    const record = findRecord(item.name)
+    if (record) {
+      const status = record.status === 1 ? 0 : 1
+      await updateConnector(record.id, { status })
+      record.status = status
+      ElMessage.success(status === 1 ? `已连接 ${item.name}` : `已断开 ${item.name}`)
+      return
+    }
+    // 新建连接器尚未完成服务端探测，不能直接标记为已连接
+    const created = await createConnector({
+      name: item.name,
+      description: item.summary || '',
+      serverType: 'HTTP',
+      endpoint: ''
+    })
+    records.value = [{ ...created }, ...records.value]
+    ElMessage.success(`已添加 ${item.name}，配置凭据后将由服务端探测连接`)
+  } catch (error) {
+    // 请求层已统一提示错误
+  }
+}
+
+async function removeConnector(item) {
+  const record = findRecord(item.name)
+  if (!record) return
+  try {
+    await ElMessageBox.confirm(`确认移除连接器「${item.name}」？`, '移除确认', {
+      type: 'warning',
+      confirmButtonText: '移除'
+    })
+  } catch (error) {
+    return
+  }
+  try {
+    await deleteConnector(record.id)
+    records.value = records.value.filter(entry => entry.id !== record.id)
+    ElMessage.success('连接器已移除')
+  } catch (error) {
+    // 请求层已统一提示错误
+  }
+}
+
+onMounted(loadConnectors)
 </script>
 
 <style scoped>
@@ -439,6 +589,20 @@ function toggleConnect(item) {
   border-radius: inherit;
   object-fit: cover;
   filter: none;
+}
+
+.connector-initial {
+  color: #e5e7eb;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .connector-badge.large .connector-logo {
