@@ -102,7 +102,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import dayjs from 'dayjs'
 import PageHeader from '@/components/PageHeader.vue'
 import StatCard from '@/components/StatCard.vue'
@@ -163,14 +163,22 @@ function statusOf(status) {
   return map[status] || { label: status, type: 'info' }
 }
 
+let refreshTimer = null
+
 function refresh() {
+  if (refreshing.value) return
   refreshing.value = true
-  window.setTimeout(() => {
+  refreshTimer = window.setTimeout(() => {
+    refreshTimer = null
     users.value = loadAdminUsers()
     tasks.value = loadAdminTasks()
     refreshing.value = false
   }, 360)
 }
+
+onBeforeUnmount(() => {
+  if (refreshTimer) window.clearTimeout(refreshTimer)
+})
 </script>
 
 <style scoped>

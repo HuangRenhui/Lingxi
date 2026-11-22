@@ -33,9 +33,9 @@
         </el-input>
         <el-select v-model="type" class="filter-item">
           <el-option label="全部类型" value="all" />
-          <el-option label="图片" value="image" />
-          <el-option label="视频" value="video" />
-          <el-option label="音频" value="music" />
+          <el-option label="图片" value="IMAGE" />
+          <el-option label="视频" value="VIDEO" />
+          <el-option label="音频" value="AUDIO" />
         </el-select>
         <el-select v-model="sort" class="filter-item">
           <el-option label="最新创建" value="new" />
@@ -66,7 +66,7 @@
             <span v-if="item.status" class="asset-review" :class="classOf(item.status)">
               {{ reviewLabel(item.status) }}
             </span>
-            <span v-if="item.type !== 'image'" class="asset-play">
+            <span v-if="item.type !== 'IMAGE'" class="asset-play">
               <el-icon><VideoPlay /></el-icon>
             </span>
             <span v-if="item.favorite" class="asset-star">
@@ -75,7 +75,7 @@
           </div>
           <div class="asset-body">
             <strong class="asset-title" :title="item.title">{{ item.title }}</strong>
-            <span class="asset-meta">{{ item.tool }} · {{ item.size }}</span>
+            <span class="asset-meta">{{ item.toolName || '未知工具' }} · {{ item.size }}</span>
             <span class="asset-time">{{ item.createdAt }}</span>
             <div class="asset-actions">
               <el-button link size="small" @click="toggleFavorite(item)">
@@ -117,12 +117,12 @@
 
     <el-dialog v-model="previewVisible" :title="previewItem?.title || '作品预览'" width="760px">
       <div v-if="previewItem" class="preview-body">
-        <img v-if="previewItem.type === 'image'" :src="previewItem.url" :alt="previewItem.title" />
-        <video v-else-if="previewItem.type === 'video'" :src="previewItem.url" controls autoplay />
+        <img v-if="previewItem.type === 'IMAGE'" :src="previewItem.url" :alt="previewItem.title" />
+        <video v-else-if="previewItem.type === 'VIDEO'" :src="previewItem.url" controls autoplay />
         <audio v-else :src="previewItem.url" controls />
         <p class="preview-prompt">{{ previewItem.prompt }}</p>
         <div class="preview-meta">
-          <span>{{ previewItem.tool }}</span>
+          <span>{{ previewItem.toolName || '未知工具' }}</span>
           <span>{{ previewItem.size }}</span>
           <span>{{ previewItem.createdAt }}</span>
         </div>
@@ -145,6 +145,7 @@ import TabStrip from '@/components/TabStrip.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { deleteArtifact, listArtifacts, updateArtifact } from '@/api/artifact'
 import { classOf } from '@/utils/text'
+import { fetchAllPages } from '@/utils/pagination'
 
 const router = useRouter()
 const assets = ref([])
@@ -168,19 +169,24 @@ function formatSize(bytes) {
 
 /** 后端用 Integer 0/1 表示收藏与回收站，页面模板按布尔使用 */
 function normalizeArtifact(item) {
+  const sizeBytes = Number(item.sizeBytes || 0)
   return {
     id: item.id,
     title: item.title || '',
-    type: item.type || '',
+    // 后端枚举是大写 IMAGE/VIDEO/AUDIO；Mock 旧数据是小写，统一转成大写
+    type: String(item.type || '').toUpperCase(),
     toolKey: item.toolKey || '',
-    toolName: item.toolName || '',
+    // 兼容后端 toolName 与 Mock 的 tool 字段
+    toolName: item.toolName || item.tool || '',
     prompt: item.prompt || '',
     url: item.url || '',
-    posterUrl: item.posterUrl || '',
-    size: formatSize(item.sizeBytes),
-    sizeBytes: Number(item.sizeBytes || 0),
-    favorite: Number(item.favorite) === 1,
-    trashed: Number(item.trashed) === 1,
+    // 兼容后端 posterUrl 与 Mock 的 poster 字段
+    posterUrl: item.posterUrl || item.poster || '',
+    // Mock 只有可读字符串 size，没有 sizeBytes 时保留原值，避免显示成 0 B
+    size: sizeBytes ? formatSize(sizeBytes) : item.size || formatSize(0),
+    sizeBytes,
+    favorite: item.favorite === true || Number(item.favorite) === 1,
+    trashed: item.trashed === true || Number(item.trashed) === 1,
     status: item.status || '',
     createdAt: item.createdAt || ''
   }
@@ -188,9 +194,9 @@ function normalizeArtifact(item) {
 
 async function loadAssetsFromApi() {
   try {
-    // 不传 trashed，取全部由页面按标签过滤，避免切换标签重复请求
-    const list = await listArtifacts({ page: 1, size: 200 })
-    assets.value = (list || []).map(normalizeArtifact)
+    // 不传 trashed，取全部由页面按标签过滤；超过后端单页上限时逐页取全
+    const result = await fetchAllPages(params => listArtifacts(params))
+    assets.value = (result ? result.list : []).map(normalizeArtifact)
   } catch (error) {
     assets.value = []
   }
@@ -246,7 +252,7 @@ const filtered = computed(() => {
 })
 
 function typeLabel(value) {
-  return { image: '图片', video: '视频', music: '音频' }[value] || value
+  return { IMAGE: '图片', VIDEO: '视频', AUDIO: '音频' }[value] || value
 }
 
 function reviewLabel(status) {
@@ -254,8 +260,8 @@ function reviewLabel(status) {
 }
 
 function thumbOf(item) {
-  if (item.type === 'image') return item.url
-  if (item.type === 'video') return item.poster || ''
+  if (item.type === 'IMAGE') return item.url
+  if (item.type === 'VIDEO') return item.posterUrl || ''
   return ''
 }
 
@@ -334,8 +340,8 @@ function extensionOf(item) {
   const matched = MEDIA_EXTENSIONS.find(ext => url.endsWith(ext))
   if (matched) return matched
   // 源地址没有可识别后缀时按作品类型兜底
-  if (item?.type === 'image') return '.jpg'
-  if (item?.type === 'music') return '.wav'
+  if (item?.type === 'IMAGE') return '.jpg'
+  if (item?.type === 'AUDIO') return '.wav'
   return '.mp4'
 }
 

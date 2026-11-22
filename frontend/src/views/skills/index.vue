@@ -29,11 +29,11 @@
         <div v-if="!filteredSkills.length" class="group-empty">你还没有任何技能。</div>
         <button
           v-for="item in filteredSkills"
-          :key="item.name"
+          :key="skillKey(item)"
           type="button"
           class="skill-item"
-          :class="{ active: current?.name === item.name }"
-          @click="currentName = item.name"
+          :class="{ active: currentKey === skillKey(item) }"
+          @click="currentKey = skillKey(item)"
         >
           <el-icon><Document /></el-icon>
           <span>{{ item.name }}</span>
@@ -46,12 +46,19 @@
             <div>
               <h2>{{ current.name }}</h2>
               <div class="detail-meta">
-                <span>{{ current.publisher }}</span>
+                <span>{{ publisherOf(current) }}</span>
                 <span>·</span>
-                <span>{{ current.downloads }} 次使用</span>
+                <span>{{ statusText(current) }}</span>
               </div>
             </div>
-            <el-button link type="danger" @click="removeSkill(current.name)">删除</el-button>
+            <div class="detail-actions">
+              <el-switch
+                :model-value="current.status !== 0"
+                size="small"
+                @change="value => toggleStatus(current, value)"
+              />
+              <el-button link type="danger" @click="removeSkill(current)">删除</el-button>
+            </div>
           </header>
           <p class="detail-desc">{{ current.description }}</p>
           <pre class="detail-content">{{ current.content }}</pre>
@@ -142,10 +149,12 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { createSkill as createSkillApi, deleteSkill, listSkills, updateSkill } from '@/api/skill'
 import { readJson, writeJson } from '@/utils/storage'
 import { matchKeyword } from '@/utils/text'
+import { fetchAllPages } from '@/utils/pagination'
 import PageHeader from '@/components/PageHeader.vue'
 
 const STORAGE_KEY = 'lingxi-skills'
@@ -225,8 +234,9 @@ const catalog = [
   }
 ]
 
-const skills = ref(loadSkills())
-const currentName = ref(skills.value[0]?.name || '')
+const skills = ref(loadDemoSkills())
+const demoMode = ref(false)
+const currentKey = ref('')
 const keyword = ref('')
 const browseVisible = ref(false)
 const createVisible = ref(false)
@@ -242,7 +252,9 @@ const filteredSkills = computed(() => {
   return skills.value.filter(item => matchKeyword(key, item.name))
 })
 
-const current = computed(() => skills.value.find(item => item.name === currentName.value) || null)
+const current = computed(
+  () => skills.value.find(item => skillKey(item) === currentKey.value) || null
+)
 
 const filteredCatalog = computed(() => {
   const key = browseKeyword.value.trim().toLowerCase()
@@ -262,14 +274,54 @@ watch([browseKeyword, browsePublisher], () => {
   page.value = 1
 })
 
-function loadSkills() {
+function skillKey(item) {
+  return item.id ?? item.name
+}
+
+function publisherOf(item) {
+  if (item.publisher) return item.publisher
+  return item.category === 'OFFICIAL' ? '官方' : '社区'
+}
+
+function statusText(item) {
+  return item.status === 0 ? '已停用' : '已启用'
+}
+
+function loadDemoSkills() {
   const cached = readJson(STORAGE_KEY, [])
   return Array.isArray(cached) ? cached : []
 }
 
-function persist() {
+function persistDemo() {
   if (!writeJson(STORAGE_KEY, skills.value)) {
     ElMessage.warning('本地存储不可用，本次改动仅保留到刷新前')
+  }
+}
+
+async function loadSkills() {
+  try {
+    const result = await fetchAllPages(params => listSkills(params))
+    if (!result) {
+      demoMode.value = false
+      skills.value = []
+      if (import.meta.env.DEV) {
+        demoMode.value = true
+        skills.value = loadDemoSkills()
+      }
+    } else {
+      demoMode.value = false
+      skills.value = result.list
+    }
+  } catch (error) {
+    demoMode.value = false
+    skills.value = []
+    if (import.meta.env.DEV) {
+      demoMode.value = true
+      skills.value = loadDemoSkills()
+    }
+  }
+  if (!skills.value.some(item => skillKey(item) === currentKey.value)) {
+    currentKey.value = skills.value.length ? skillKey(skills.value[0]) : ''
   }
 }
 
@@ -277,15 +329,35 @@ function isAdded(name) {
   return skills.value.some(item => item.name === name)
 }
 
-function addSkill(item) {
-  if (isAdded(item.name)) return
-  skills.value.push({ ...item })
-  currentName.value = item.name
-  persist()
-  ElMessage.success(`已添加 ${item.name}`)
+function toPayload(item) {
+  return {
+    name: item.name,
+    description: item.description || '',
+    content: item.content,
+    category: item.category || (item.type === 'official' ? 'OFFICIAL' : 'COMMUNITY')
+  }
 }
 
-function createSkill() {
+async function addSkill(item) {
+  if (isAdded(item.name)) return
+  if (demoMode.value) {
+    skills.value.push({ ...item })
+    currentKey.value = skillKey(item)
+    persistDemo()
+    ElMessage.success(`已添加 ${item.name}`)
+    return
+  }
+  try {
+    const created = await createSkillApi(toPayload(item))
+    await loadSkills()
+    currentKey.value = skillKey(created)
+    ElMessage.success(`已添加 ${item.name}`)
+  } catch (error) {
+    // 请求层已统一提示错误
+  }
+}
+
+async function createSkill() {
   if (!newSkill.name.trim() || !newSkill.content.trim()) {
     ElMessage.warning('请填写技能名称与内容')
     return
@@ -295,16 +367,26 @@ function createSkill() {
     ElMessage.warning('同名技能已存在')
     return
   }
-  skills.value.push({
+  const payload = {
     name,
-    publisher: '我',
-    type: 'community',
-    downloads: 0,
-    description: newSkill.description || '自定义技能',
-    content: newSkill.content
-  })
-  currentName.value = name
-  persist()
+    description: newSkill.description,
+    content: newSkill.content,
+    category: 'COMMUNITY'
+  }
+  if (demoMode.value) {
+    const item = { ...payload, publisher: '我', type: 'community', downloads: 0, status: 1 }
+    skills.value.push(item)
+    currentKey.value = skillKey(item)
+    persistDemo()
+  } else {
+    try {
+      const created = await createSkillApi(payload)
+      await loadSkills()
+      currentKey.value = skillKey(created)
+    } catch (error) {
+      return
+    }
+  }
   newSkill.name = ''
   newSkill.description = ''
   newSkill.content = ''
@@ -312,12 +394,50 @@ function createSkill() {
   ElMessage.success('技能已创建')
 }
 
-function removeSkill(name) {
-  skills.value = skills.value.filter(item => item.name !== name)
-  if (currentName.value === name) currentName.value = skills.value[0]?.name || ''
-  persist()
+async function toggleStatus(item, enabled) {
+  const status = enabled ? 1 : 0
+  if (demoMode.value) {
+    item.status = status
+    persistDemo()
+    ElMessage.success(enabled ? '技能已启用' : '技能已停用')
+    return
+  }
+  try {
+    await updateSkill(item.id, { status })
+    item.status = status
+    ElMessage.success(enabled ? '技能已启用' : '技能已停用')
+  } catch (error) {
+    // 请求层已统一提示错误
+  }
+}
+
+async function removeSkill(item) {
+  try {
+    await ElMessageBox.confirm(`确认删除技能「${item.name}」？`, '删除确认', {
+      type: 'warning',
+      confirmButtonText: '删除'
+    })
+  } catch (error) {
+    return
+  }
+  if (demoMode.value) {
+    skills.value = skills.value.filter(entry => skillKey(entry) !== skillKey(item))
+    persistDemo()
+  } else {
+    try {
+      await deleteSkill(item.id)
+      await loadSkills()
+    } catch (error) {
+      return
+    }
+  }
+  if (currentKey.value === skillKey(item)) {
+    currentKey.value = skills.value.length ? skillKey(skills.value[0]) : ''
+  }
   ElMessage.success('技能已删除')
 }
+
+onMounted(loadSkills)
 </script>
 
 <style scoped>
@@ -412,6 +532,12 @@ function removeSkill(name) {
   margin-top: 6px;
   color: #5b636e;
   font-size: 11.5px;
+}
+
+.detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
 
 .detail-desc {

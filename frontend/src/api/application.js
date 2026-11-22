@@ -1,6 +1,6 @@
 import request from '@/utils/request'
 
-export function listApplications({ page = 1, size = 200 } = {}) {
+export function listApplications({ page = 1, size = 100 } = {}) {
   return request.get('/applications', { params: { page, size } })
 }
 

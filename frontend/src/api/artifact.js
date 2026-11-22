@@ -1,7 +1,7 @@
 import request from '@/utils/request'
 
 /** 作品列表；type 可筛选类型，trashed=1 查回收站 */
-export function listArtifacts({ page = 1, size = 200, type, keyword, trashed } = {}) {
+export function listArtifacts({ page = 1, size = 100, type, keyword, trashed } = {}) {
   return request.get('/artifacts', { params: { page, size, type, keyword, trashed } })
 }
 

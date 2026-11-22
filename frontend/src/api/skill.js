@@ -1,6 +1,6 @@
 import request from '@/utils/request'
 
-export function listSkills({ page = 1, size = 200 } = {}) {
+export function listSkills({ page = 1, size = 100 } = {}) {
   return request.get('/skills', { params: { page, size } })
 }
 

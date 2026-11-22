@@ -558,7 +558,8 @@ function generate() {
 
       // 产物入作品库（后端 artifacts），作品库页面读取同一份数据
       await createArtifact({
-        type: task.kind === 'music' ? 'music' : task.kind === 'video' ? 'video' : 'image',
+        // 后端枚举是 IMAGE / VIDEO / AUDIO，必须与 ArtifactCreateRequest 保持一致
+        type: task.kind === 'music' ? 'AUDIO' : task.kind === 'video' ? 'VIDEO' : 'IMAGE',
         toolKey: tool.value.key,
         toolName: tool.value.title,
         title: task.title,

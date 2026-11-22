@@ -35,7 +35,9 @@
         </div>
 
         <div class="topbar-right">
-          <span class="demo-chip"><i class="dot" />演示数据</span>
+          <span class="demo-chip" :class="{ live: realDataPage }">
+            <i class="dot" />{{ realDataPage ? '实时数据' : '演示数据' }}
+          </span>
           <el-dropdown trigger="click" placement="bottom-end" @command="handleCommand">
             <button type="button" class="admin-user">
               <span class="avatar">{{ initial }}</span>
@@ -78,6 +80,10 @@ import { ADMIN_HOME_PATH, ADMIN_LOGIN_PATH, adminPath } from '@/config/admin'
 const route = useRoute()
 const router = useRouter()
 const adminSession = getAdminSession() || {}
+// 套餐/优惠券/计费规则/内容审核已接真实接口，其余管理页仍为演示数据
+const realDataPage = computed(() =>
+  ['AdminPlans', 'AdminCoupons', 'AdminBillingRules', 'AdminModeration'].includes(String(route.name))
+)
 
 const navGroups = [
   {
@@ -322,6 +328,16 @@ function handleCommand(command) {
   height: 5px;
   border-radius: 50%;
   background: #f59e0b;
+}
+
+.demo-chip.live {
+  border-color: rgba(34, 197, 94, 0.28);
+  background: rgba(34, 197, 94, 0.1);
+  color: #4ade80;
+}
+
+.demo-chip.live .dot {
+  background: #22c55e;
 }
 
 .admin-user {
