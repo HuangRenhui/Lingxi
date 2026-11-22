@@ -11,6 +11,17 @@
       </el-button>
     </PageHeader>
 
+    <el-alert
+      v-if="!isDev"
+      class="demo-note"
+      style="margin-bottom: 16px"
+      type="info"
+      :closable="false"
+      show-icon
+      title="当前展示的是演示账户数据"
+      description="真实钱包与积分流水接口尚未接入；充值、兑换等写操作在生产环境已禁用。"
+    />
+
     <section class="stat-grid">
       <StatCard label="可用余额" :value="wallet.balance.toFixed(2)" unit="积分" icon="Coin" hint="可直接用于全部模型调用" />
       <StatCard label="冻结中" :value="wallet.frozen.toFixed(2)" unit="积分" icon="Lock" hint="运行中任务预扣，结束后结算" />
@@ -353,11 +364,12 @@ import {
   markCouponUsed,
   redeemCode as submitRedeemCode
 } from '@/mock/coupons'
-import { creditSummary, loadBatchEntries, loadRewardBatches } from '@/mock/credits'
+import { creditSummary, loadBatchEntries, loadRewardBatches, rechargeToPurchased } from '@/mock/credits'
 import { downloadCsv } from '@/utils/csv'
 
 const route = useRoute()
 const router = useRouter()
+const isDev = import.meta.env.DEV
 const wallet = ref(loadWallet())
 const logs = ref(loadWalletLogs())
 // 积分构成：购买积分 + 奖励积分；奖励按批次展示并可查明细
@@ -510,6 +522,10 @@ function focusRedeem() {
 }
 
 function recharge() {
+  if (!import.meta.env.DEV) {
+    ElMessage.info('在线充值暂未接入，请通过后台或兑换码入账')
+    return
+  }
   if (!amount.value || amount.value < 1) {
     ElMessage.warning('请输入有效的充值金额')
     return
@@ -570,6 +586,11 @@ function recharge() {
 }
 
 function redeem() {
+  // 后端尚未提供用户侧兑换码接口，生产环境只保留展示
+  if (!import.meta.env.DEV) {
+    ElMessage.info('兑换码功能暂未接入')
+    return
+  }
   if (redeeming.value) return
   redeeming.value = true
   redeemTimer = window.setTimeout(() => {

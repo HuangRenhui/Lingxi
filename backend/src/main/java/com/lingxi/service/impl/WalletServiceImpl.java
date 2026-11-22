@@ -124,9 +124,11 @@ public class WalletServiceImpl implements WalletService {
         if (normalized.compareTo(BigDecimal.ZERO) == 0) {
             return ensureAccount(userId);
         }
-        // 幂等：同一业务键已记账则直接返回，避免重试导致重复扣减
-        if (StringUtils.hasText(bizNo) && transactionExists(userId, bizNo)) {
-            return walletAccountMapper.selectByUserId(userId);
+        // 先锁账户，再判断幂等键：否则并发重试会同时通过 transactionExists，
+        // 第二个请求随后撞唯一索引并整体回滚，表现为「重试失败」。
+        WalletAccount locked = lockAccount(userId);
+        if (StringUtils.hasText(bizNo) && transactionExists(bizNo)) {
+            return locked;
         }
         int affected = walletAccountMapper.deduct(userId, normalized);
         if (affected == 0) {
@@ -148,8 +150,9 @@ public class WalletServiceImpl implements WalletService {
         if (normalized.compareTo(BigDecimal.ZERO) == 0) {
             return ensureAccount(userId);
         }
-        if (StringUtils.hasText(bizNo) && transactionExists(userId, bizNo)) {
-            return walletAccountMapper.selectByUserId(userId);
+        WalletAccount locked = lockAccount(userId);
+        if (StringUtils.hasText(bizNo) && transactionExists(bizNo)) {
+            return locked;
         }
         BigDecimal recharge = "RECHARGE".equals(type) ? normalized : BigDecimal.ZERO;
         int affected = walletAccountMapper.credit(userId, normalized, recharge);
@@ -169,11 +172,11 @@ public class WalletServiceImpl implements WalletService {
     }
 
     /**
-     * 幂等键是否已存在流水记录。
+     * 幂等键是否已存在流水记录。唯一索引是全局的（biz_no），查询不能带 userId，
+     * 否则跨用户同键会被误判为不存在，最终撞唯一索引回滚。
      */
-    private boolean transactionExists(Long userId, String bizNo) {
+    private boolean transactionExists(String bizNo) {
         Long count = walletTransactionMapper.selectCount(new LambdaQueryWrapper<WalletTransaction>()
-                .eq(WalletTransaction::getUserId, userId)
                 .eq(WalletTransaction::getBizNo, bizNo));
         return count != null && count > 0;
     }
