@@ -1,7 +1,7 @@
 import request from '@/utils/request'
 
 /** 订单列表；status/type/keyword 均可选 */
-export function listOrders({ page = 1, size = 200, status, type, keyword } = {}) {
+export function listOrders({ page = 1, size = 100, status, type, keyword } = {}) {
   return request.get('/orders', { params: { page, size, status, type, keyword } })
 }
 

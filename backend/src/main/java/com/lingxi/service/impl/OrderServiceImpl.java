@@ -87,7 +87,9 @@ public class OrderServiceImpl implements OrderService {
         order.setOrderNo(OrderNoGenerator.next());
         order.setUserId(SecurityUtils.getUserId());
         order.setDescription(request.getDescription().trim());
-        order.setType(StringUtils.hasText(request.getType()) ? request.getType() : "CONSUME");
+        // 类型必须在白名单内，避免任意字符串污染筛选与统计
+        String type = StringUtils.hasText(request.getType()) ? request.getType().trim() : "CONSUME";
+        order.setType(normalizeFilter(type, TYPES) != null ? type : "CONSUME");
         // 金额统一保留 6 位小数，与 DECIMAL(18,6) 对齐，避免尾差
         order.setAmount(request.getAmount().setScale(6, RoundingMode.HALF_UP));
         order.setPayMethod(trimToNull(request.getPayMethod()));

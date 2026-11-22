@@ -47,7 +47,7 @@
       <el-table :data="paged" size="small">
         <el-table-column label="订单ID" min-width="180">
           <template #default="{ row }">
-            <span class="mono order-no">{{ row.id }}</span>
+            <span class="mono order-no">{{ row.orderNo || row.id }}</span>
           </template>
         </el-table-column>
         <el-table-column label="金额" width="120">
@@ -65,19 +65,41 @@
         </el-table-column>
         <el-table-column prop="payMethod" label="支付方式" width="120" />
         <el-table-column prop="createdAt" label="创建时间" width="160" />
-        <el-table-column label="操作" width="150">
+        <el-table-column label="操作" width="170">
           <template #default="{ row }">
-            <el-button v-if="row.status === 'pending'" link size="small" @click="payNow(row)">
+            <el-button
+              v-if="row.status === 'pending' && demoMode"
+              link
+              size="small"
+              @click="payNow(row)"
+            >
               去支付
             </el-button>
             <el-button
-              v-else-if="row.status === 'paid' && row.amount > 0"
+              v-else-if="row.status === 'pending'"
+              link
+              size="small"
+              @click="cancelOrder(row)"
+            >
+              取消订单
+            </el-button>
+            <el-button
+              v-if="row.status === 'paid' && row.amount > 0 && demoMode"
               link
               size="small"
               type="danger"
               @click="applyRefund(row)"
             >
               申请退款
+            </el-button>
+            <el-button
+              v-if="row.status === 'cancelled'"
+              link
+              size="small"
+              type="danger"
+              @click="removeOrder(row)"
+            >
+              删除
             </el-button>
             <el-button link size="small" @click="showDetail(row)">详情</el-button>
           </template>
@@ -101,10 +123,11 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import dayjs from 'dayjs'
+import { changeOrderStatus, deleteOrder, listOrders } from '@/api/order'
 import PageHeader from '@/components/PageHeader.vue'
 import StatCard from '@/components/StatCard.vue'
 import {
@@ -117,14 +140,77 @@ import {
 import { requestRefund } from '@/mock/platform'
 import { rechargeToPurchased } from '@/mock/credits'
 import { downloadCsv } from '@/utils/csv'
+import { fetchAllPages } from '@/utils/pagination'
 
 const router = useRouter()
-const orders = ref(loadOrders())
+const orders = ref([])
+const demoMode = ref(false)
 const status = ref('all')
 const payMethod = ref('all')
 const range = ref([])
 const page = ref(1)
 const pageSize = 8
+
+/** 后端订单状态到页面状态值 */
+const STATUS_MAP = {
+  PAID: 'paid',
+  PENDING: 'pending',
+  CANCELLED: 'cancelled',
+  REFUNDING: 'refunding',
+  REFUNDED: 'refunded'
+}
+
+/** 后端支付方式到页面展示文案 */
+const PAY_METHOD_MAP = {
+  ALIPAY: '支付宝',
+  WECHAT: '微信支付',
+  REDEEM: '兑换码',
+  BALANCE: '余额'
+}
+
+function formatTime(value) {
+  return value ? dayjs(value).format('YYYY-MM-DD HH:mm') : '—'
+}
+
+function normalizeOrder(row) {
+  return {
+    id: row.id,
+    orderNo: row.orderNo,
+    amount: Number(row.amount) || 0,
+    description: row.description || '—',
+    status: STATUS_MAP[row.status] || row.status,
+    payMethod: PAY_METHOD_MAP[row.payMethod] || row.payMethod || '—',
+    createdAt: formatTime(row.createdAt),
+    paidAt: formatTime(row.paidAt)
+  }
+}
+
+async function fetchOrders() {
+  try {
+    const result = await fetchAllPages(params => listOrders(params))
+    if (!result) {
+      demoMode.value = false
+      orders.value = []
+      if (import.meta.env.DEV) {
+        demoMode.value = true
+        orders.value = loadOrders()
+      }
+      return
+    }
+    demoMode.value = false
+    orders.value = result.list.map(normalizeOrder)
+  } catch (error) {
+    // 生产环境不能把接口失败伪装成本地演示订单
+    demoMode.value = false
+    orders.value = []
+    if (import.meta.env.DEV) {
+      demoMode.value = true
+      orders.value = loadOrders()
+    }
+  }
+}
+
+onMounted(fetchOrders)
 
 const filtered = computed(() =>
   orders.value.filter(row => {
@@ -132,7 +218,7 @@ const filtered = computed(() =>
     const matchPay = payMethod.value === 'all' || row.payMethod === payMethod.value
     let matchRange = true
     if (range.value?.length === 2) {
-      const day = row.createdAt.slice(0, 10)
+      const day = String(row.createdAt).slice(0, 10)
       matchRange =
         day >= dayjs(range.value[0]).format('YYYY-MM-DD') && day <= dayjs(range.value[1]).format('YYYY-MM-DD')
     }
@@ -175,8 +261,9 @@ function resetFilters() {
 }
 
 async function payNow(row) {
+  if (!demoMode.value) return
   try {
-    await ElMessageBox.confirm(`确认支付订单 ${row.id}，金额 ¥${row.amount.toFixed(2)}？`, '支付确认', {
+    await ElMessageBox.confirm(`确认支付订单 ${row.orderNo || row.id}，金额 ¥${row.amount.toFixed(2)}？`, '支付确认', {
       confirmButtonText: '确认支付',
       cancelButtonText: '取消'
     })
@@ -205,7 +292,57 @@ async function payNow(row) {
   ElMessage.success('支付成功')
 }
 
+async function cancelOrder(row) {
+  try {
+    await ElMessageBox.confirm(`确认取消订单 ${row.orderNo || row.id}？`, '取消订单', {
+      type: 'warning',
+      confirmButtonText: '取消订单',
+      cancelButtonText: '保留'
+    })
+  } catch (error) {
+    return
+  }
+  if (demoMode.value) {
+    row.status = 'cancelled'
+    saveOrders(orders.value)
+    ElMessage.success('订单已取消')
+    return
+  }
+  try {
+    await changeOrderStatus(row.id, 'CANCELLED')
+    row.status = 'cancelled'
+    ElMessage.success('订单已取消')
+  } catch (error) {
+    // 请求层已统一提示错误
+  }
+}
+
+async function removeOrder(row) {
+  try {
+    await ElMessageBox.confirm(`删除后订单 ${row.orderNo || row.id} 不可恢复，确认继续？`, '删除订单', {
+      type: 'warning',
+      confirmButtonText: '删除'
+    })
+  } catch (error) {
+    return
+  }
+  if (demoMode.value) {
+    orders.value = orders.value.filter(entry => entry.id !== row.id)
+    saveOrders(orders.value)
+    ElMessage.success('订单已删除')
+    return
+  }
+  try {
+    await deleteOrder(row.id)
+    orders.value = orders.value.filter(entry => entry.id !== row.id)
+    ElMessage.success('订单已删除')
+  } catch (error) {
+    // 请求层已统一提示错误
+  }
+}
+
 async function applyRefund(row) {
+  if (!demoMode.value) return
   let reason = ''
   try {
     const result = await ElMessageBox.prompt('请填写退款原因，提交后由管理员审核', '申请退款', {
@@ -229,7 +366,7 @@ async function applyRefund(row) {
 
 function showDetail(row) {
   ElMessageBox.alert(
-    `订单号：${row.id}\n金额：¥${row.amount.toFixed(2)}\n描述：${row.description}\n支付方式：${row.payMethod}\n创建时间：${row.createdAt}\n状态：${statusOf(row.status).label}`,
+    `订单号：${row.orderNo || row.id}\n金额：¥${row.amount.toFixed(2)}\n描述：${row.description}\n支付方式：${row.payMethod}\n创建时间：${row.createdAt}\n状态：${statusOf(row.status).label}`,
     '订单详情',
     { confirmButtonText: '知道了' }
   )
@@ -244,7 +381,7 @@ function exportCsv() {
     `订单列表-${dayjs().format('YYYYMMDD')}.csv`,
     ['订单ID', '金额', '订单描述', '状态', '支付方式', '创建时间'],
     filtered.value.map(row => [
-      row.id,
+      row.orderNo || row.id,
       row.amount,
       row.description,
       statusOf(row.status).label,
