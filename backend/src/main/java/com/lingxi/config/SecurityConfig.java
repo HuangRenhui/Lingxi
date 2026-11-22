@@ -81,6 +81,9 @@ public class SecurityConfig {
                 // 浏览器跨域预检请求不携带凭证，必须放行，否则前端请求会在 OPTIONS 阶段被拦截。
                 .antMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .antMatchers(WHITE_LIST).permitAll()
+                // 管理端接口在 URL 层再兜一层：即使新增的 Controller 忘记调用 requireAdmin()，
+                // 非管理员也只能拿到 403，避免因遗漏校验直接越权。
+                .antMatchers("/admin/**").hasRole("ADMIN")
                 .anyRequest().authenticated().and()
                 // 认证失败与权限不足分别交给两个 Handler，保证始终返回统一的 JSON 结构，
                 // 而不是 Spring Security 默认的 HTML 登录页或空响应。
