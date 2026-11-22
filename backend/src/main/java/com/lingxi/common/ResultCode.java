@@ -85,7 +85,17 @@ public enum ResultCode {
     USERNAME_TAKEN(9001, "用户名已存在"),
     CANNOT_DELETE_SELF(9002, "不能删除当前登录账号"),
     ADMIN_REQUIRED(9003, "需要管理员权限"),
-    SELF_OPERATION_FORBIDDEN(9004, "不能停用或降级当前登录账号");
+    SELF_OPERATION_FORBIDDEN(9004, "不能停用或降级当前登录账号"),
+
+    /* 运营配置：9101-9199 */
+    COUPON_NOT_FOUND(9101, "优惠券不存在"),
+    REDEEM_CODE_NOT_FOUND(9102, "兑换码不存在"),
+    REDEEM_CODE_ALREADY_USED(9103, "兑换码已被使用或作废"),
+    BILLING_RULE_NOT_FOUND(9104, "计费规则不存在"),
+    MODERATION_REPORT_NOT_FOUND(9105, "举报记录不存在"),
+    SUBSCRIPTION_PLAN_KEY_TAKEN(9106, "套餐标识已存在"),
+    SENSITIVE_WORD_NOT_FOUND(9107, "敏感词不存在"),
+    CONTENT_SENSITIVE(9108, "内容包含敏感词");
 
     private final int code;
     private final String message;
