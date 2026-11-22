@@ -45,9 +45,15 @@ public class LoginAttemptService {
     public void onFailure(String username) {
         String key = RedisKeys.loginFail(username);
         try {
-            Long count = redisTemplate.opsForValue().increment(key);
-            // 首次失败时设置过期时间；后续失败复用同一窗口，避免每次都延长锁定时长。
-            if (count != null && count == 1L) {
+            // setIfAbsent 先把 TTL 和初始值一起写入，避免 increment 成功但 expire 失败时
+            // 留下没有过期时间的 key，导致该账号被永久锁定。
+            Boolean fresh = redisTemplate.opsForValue().setIfAbsent(key, "1", LOCK_DURATION);
+            if (!Boolean.TRUE.equals(fresh)) {
+                redisTemplate.opsForValue().increment(key);
+            }
+            // 兼容历史遗留的无 TTL key：只在确实没有过期时间时补一次，不延长正常窗口。
+            Long ttl = redisTemplate.getExpire(key);
+            if (ttl == null || ttl < 0) {
                 redisTemplate.expire(key, LOCK_DURATION);
             }
         } catch (RuntimeException ex) {
@@ -80,6 +86,14 @@ public class LoginAttemptService {
 
     private void incrementFallback(String username) {
         long now = System.currentTimeMillis();
+        // Redis 长时间不可用时，攻击者可以提交大量随机用户名；这里做一次有界清理，
+        // 避免 fallback 计数 Map 无限制增长。
+        if (fallbackCounters.size() >= 10000) {
+            fallbackCounters.entrySet().removeIf(entry -> entry.getValue().expireAt <= now);
+            if (fallbackCounters.size() >= 10000) {
+                fallbackCounters.clear();
+            }
+        }
         fallbackCounters.compute(username, (key, existing) -> {
             if (existing == null || existing.expireAt <= now) {
                 return new FallbackCounter(now + LOCK_DURATION.toMillis(), 1);

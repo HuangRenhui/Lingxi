@@ -83,7 +83,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             try {
                 Claims claims = jwtTokenProvider.parseToken(token);
                 // 已注销的 Token 视作未认证；Redis 异常时黑名单服务返回 false，保证请求可继续。
+                Long userId = Long.valueOf(claims.getSubject());
                 if (tokenBlacklistService.isBlacklisted(token)) {
+                    SecurityContextHolder.clearContext();
+                } else if (tokenBlacklistService.isIssuedBeforeInvalidation(userId, claims.getIssuedAt())) {
+                    // 改密/禁用/删除后，变更前签发的令牌一律失效，避免旧凭证继续使用
+                    log.warn("JWT rejected: issued before credential invalidation, user {}", userId);
                     SecurityContextHolder.clearContext();
                 } else {
                     authenticate(claims, request);

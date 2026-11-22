@@ -162,11 +162,12 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import dayjs from 'dayjs'
+import { deleteDevice, listDevices } from '@/api/device'
 import PageHeader from '@/components/PageHeader.vue'
 import TablePager from '@/components/TablePager.vue'
 import {
@@ -183,12 +184,52 @@ const router = useRouter()
 const store = useStore()
 const profile = reactive(loadProfile())
 const security = reactive(loadSecurity())
-const devices = ref(loadDevices())
+const devices = ref([])
+const deviceDemoMode = ref(false)
 const page = ref(1)
 const pageSize = 10
 const pagedDevices = computed(() =>
   devices.value.slice((page.value - 1) * pageSize, page.value * pageSize)
 )
+
+function normalizeDevice(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    os: row.os,
+    browser: row.browser,
+    ip: row.ip,
+    location: row.location,
+    current: row.currentFlag === 1,
+    lastActiveAt: row.lastActiveAt ? dayjs(row.lastActiveAt).format('YYYY-MM-DD HH:mm') : '—'
+  }
+}
+
+async function fetchDevices() {
+  try {
+    const list = await listDevices()
+    if (!Array.isArray(list)) {
+      deviceDemoMode.value = false
+      devices.value = []
+      if (import.meta.env.DEV) {
+        deviceDemoMode.value = true
+        devices.value = loadDevices()
+      }
+      return
+    }
+    deviceDemoMode.value = false
+    devices.value = list.map(normalizeDevice)
+  } catch (error) {
+    deviceDemoMode.value = false
+    devices.value = []
+    if (import.meta.env.DEV) {
+      deviceDemoMode.value = true
+      devices.value = loadDevices()
+    }
+  }
+}
+
+onMounted(fetchDevices)
 const savingPwd = ref(false)
 const rebindVisible = ref(false)
 
@@ -209,6 +250,11 @@ const strength = computed(() => {
 const strengthText = computed(() => ['未输入', '弱', '一般', '较强', '很强'][strength.value])
 
 function changePassword() {
+  // 真实后端尚未提供自助改密接口，生产环境不能提示“密码已更新”
+  if (!import.meta.env.DEV) {
+    ElMessage.info('自助改密暂未接入，请联系管理员重置密码')
+    return
+  }
   if (!pwd.current) {
     ElMessage.warning('请输入当前密码')
     return
@@ -234,11 +280,21 @@ function changePassword() {
 }
 
 function toggleTwoFactor(value) {
+  if (!import.meta.env.DEV) {
+    security.twoFactor = !value
+    ElMessage.info('两步验证暂未接入')
+    return
+  }
   saveSecurity({ ...security })
   ElMessage.success(value ? '已开启两步验证' : '已关闭两步验证')
 }
 
 function toggleLoginAlert(value) {
+  if (!import.meta.env.DEV) {
+    security.loginAlert = !value
+    ElMessage.info('登录提醒暂未接入')
+    return
+  }
   saveSecurity({ ...security })
   ElMessage.success(value ? '已开启异地登录提醒' : '已关闭异地登录提醒')
 }
@@ -270,6 +326,10 @@ function sendCode() {
 onBeforeUnmount(stopCountdown)
 
 function confirmRebind() {
+  if (!import.meta.env.DEV) {
+    ElMessage.info('邮箱换绑暂未接入')
+    return
+  }
   if (!rebind.email || !rebind.code) {
     ElMessage.warning('请填写新邮箱与验证码')
     return
@@ -282,10 +342,20 @@ function confirmRebind() {
   ElMessage.success('邮箱已换绑')
 }
 
-function offlineDevice(row) {
-  devices.value = devices.value.filter(item => item.id !== row.id)
-  saveDevices(devices.value)
-  ElMessage.success(`已下线 ${row.name}`)
+async function offlineDevice(row) {
+  if (deviceDemoMode.value) {
+    devices.value = devices.value.filter(item => item.id !== row.id)
+    saveDevices(devices.value)
+    ElMessage.success(`已下线 ${row.name}`)
+    return
+  }
+  try {
+    await deleteDevice(row.id)
+    devices.value = devices.value.filter(item => item.id !== row.id)
+    ElMessage.success(`已下线 ${row.name}`)
+  } catch (error) {
+    // 请求层已统一提示错误
+  }
 }
 
 async function offlineOthers() {
@@ -297,9 +367,24 @@ async function offlineOthers() {
   } catch (error) {
     return
   }
-  devices.value = devices.value.filter(item => item.current)
-  saveDevices(devices.value)
-  ElMessage.success('其他设备已全部下线')
+  if (deviceDemoMode.value) {
+    devices.value = devices.value.filter(item => item.current)
+    saveDevices(devices.value)
+    ElMessage.success('其他设备已全部下线')
+    return
+  }
+  const others = devices.value.filter(item => !item.current)
+  if (!others.length) {
+    ElMessage.info('没有需要下线的其他设备')
+    return
+  }
+  try {
+    await Promise.all(others.map(item => deleteDevice(item.id)))
+    devices.value = devices.value.filter(item => item.current)
+    ElMessage.success('其他设备已全部下线')
+  } catch (error) {
+    await fetchDevices()
+  }
 }
 
 async function clearDemoData() {
@@ -317,6 +402,10 @@ async function clearDemoData() {
 }
 
 async function deleteAccount() {
+  if (!import.meta.env.DEV) {
+    ElMessage.info('注销账号暂未接入，请联系管理员处理')
+    return
+  }
   try {
     await ElMessageBox.confirm(
       '注销后本地账号将立即失效，所有演示数据会被清除。该操作不可恢复。',

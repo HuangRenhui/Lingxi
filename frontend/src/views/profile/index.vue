@@ -146,8 +146,14 @@ function pickAvatar() {
 function onAvatarChange(event) {
   const file = event.target.files?.[0]
   if (!file) return
+  if (!file.type.startsWith('image/')) {
+    ElMessage.warning('请选择图片文件')
+    event.target.value = ''
+    return
+  }
   if (file.size > 1024 * 1024) {
     ElMessage.warning('头像图片请控制在 1MB 以内')
+    event.target.value = ''
     return
   }
   const reader = new FileReader()
@@ -155,11 +161,16 @@ function onAvatarChange(event) {
     form.avatar = String(reader.result)
     ElMessage.success('头像已更新，记得保存')
   }
+  reader.onerror = () => ElMessage.error('头像读取失败，请重试')
   reader.readAsDataURL(file)
   event.target.value = ''
 }
 
 function save() {
+  if (!import.meta.env.DEV) {
+    ElMessage.info('资料修改暂未接入后端，请联系管理员更新')
+    return
+  }
   if (!form.nickname.trim()) {
     ElMessage.warning('昵称不能为空')
     return

@@ -10,7 +10,7 @@
       </div>
 
       <template v-if="mode === 'login'">
-        <h1>使用电子邮件登录</h1>
+        <h1>使用账号登录</h1>
 
         <el-form
           ref="loginFormRef"
@@ -19,8 +19,8 @@
           class="auth-form"
           @keyup.enter="submitLogin"
         >
-          <el-form-item prop="email">
-            <el-input v-model="loginForm.email" placeholder="电子邮件" size="large" autocomplete="email" />
+          <el-form-item prop="username">
+            <el-input v-model="loginForm.username" placeholder="用户名" size="large" autocomplete="username" />
           </el-form-item>
           <el-form-item prop="password">
             <el-input
@@ -88,10 +88,11 @@
           使用 Apple 登录
         </button>
 
-        <div class="switch-line">
+        <div v-if="isMock" class="switch-line">
           还没有账户？
           <button type="button" class="text-link" @click="toRegister">注册</button>
         </div>
+        <p v-else class="demo-tip">注册功能暂未开放，请联系管理员开通账号。</p>
       </template>
 
       <template v-else>
@@ -173,7 +174,7 @@ const countdown = ref(0)
 const loginFormRef = ref()
 const registerFormRef = ref()
 
-const loginForm = reactive({ email: '', password: '' })
+const loginForm = reactive({ username: '', password: '' })
 const registerForm = reactive({ email: '', code: '', password: '' })
 
 let countdownTimer = null
@@ -183,8 +184,13 @@ const emailRules = [
   { type: 'email', message: '请输入有效的电子邮件', trigger: 'blur' }
 ]
 
+const usernameRules = [
+  { required: true, message: '请输入用户名', trigger: 'blur' },
+  { min: 4, max: 64, message: '用户名长度为 4-64 个字符', trigger: 'blur' }
+]
+
 const loginRules = {
-  email: emailRules,
+  username: usernameRules,
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
 }
 
@@ -235,7 +241,7 @@ async function submitLogin() {
   loading.value = true
   try {
     await store.dispatch('user/login', {
-      email: loginForm.email.trim(),
+      username: loginForm.username.trim(),
       password: loginForm.password
     })
     ElMessage.success('登录成功')
@@ -248,6 +254,10 @@ async function submitLogin() {
 }
 
 async function sendCode() {
+  if (!isMock) {
+    ElMessage.info('注册功能暂未开放')
+    return
+  }
   const email = registerForm.email.trim()
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     ElMessage.warning('请先输入有效的电子邮件')
@@ -270,6 +280,10 @@ async function sendCode() {
 }
 
 async function submitRegister() {
+  if (!isMock) {
+    ElMessage.info('注册功能暂未开放，请联系管理员开通账号')
+    return
+  }
   const valid = await registerFormRef.value.validate().catch(() => false)
   if (!valid) return
   loading.value = true
@@ -289,24 +303,26 @@ async function submitRegister() {
 }
 
 function toRegister() {
-  registerForm.email = loginForm.email
+  // 真实后端尚未提供注册/验证码接口，生产环境只保留登录入口。
+  if (!isMock) return
+  registerForm.email = ''
   registerForm.code = ''
   registerForm.password = ''
   mode.value = 'register'
 }
 
 function toLogin() {
-  loginForm.email = registerForm.email
+  loginForm.username = ''
   loginForm.password = ''
   mode.value = 'login'
 }
 
 function onForgot() {
-  ElMessage.info('演示环境暂不支持找回密码，请使用演示账号或重新注册')
+  ElMessage.info('找回密码暂未接入，请联系管理员重置')
 }
 
 function unsupported(name) {
-  ElMessage.info(`${name}登录暂未接入，请使用电子邮件登录`)
+  ElMessage.info(`${name}登录暂未接入，请使用账号密码登录`)
 }
 
 onBeforeUnmount(() => {

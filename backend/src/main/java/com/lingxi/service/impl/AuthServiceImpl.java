@@ -21,6 +21,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.util.Locale;
+
 /**
  * 认证服务实现：账号密码校验 + JWT 签发。
  */
@@ -47,13 +49,17 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public LoginVO login(LoginRequest request) {
+        // 用户名归一化后再计数：数据库排序规则大小写不敏感，
+        // 若用原始输入做 key，Admin/admin 会命中同一账号却绕开失败次数限制。
+        String username = request.getUsername().trim();
+        String attemptKey = username.toLowerCase(Locale.ROOT);
         // 连续失败达到阈值后直接拒绝，避免在线暴力破解；Redis 故障时使用本地计数降级。
-        loginAttemptService.checkLocked(request.getUsername());
+        loginAttemptService.checkLocked(attemptKey);
         SysUser user = sysUserMapper.selectOne(new LambdaQueryWrapper<SysUser>()
-                .eq(SysUser::getUsername, request.getUsername()));
+                .eq(SysUser::getUsername, username));
         // 用户不存在与密码错误统一返回 INVALID_CREDENTIALS，避免通过错误信息枚举有效账号。
         if (user == null || !passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            loginAttemptService.onFailure(request.getUsername());
+            loginAttemptService.onFailure(attemptKey);
             throw new BusinessException(ResultCode.INVALID_CREDENTIALS);
         }
         // 先校验凭证再校验状态，避免向未通过身份验证的请求泄露账号是否被禁用。
@@ -61,7 +67,7 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException(ResultCode.ACCOUNT_DISABLED);
         }
         // 登录成功清除失败计数，避免影响后续正常登录。
-        loginAttemptService.onSuccess(request.getUsername());
+        loginAttemptService.onSuccess(attemptKey);
 
         LoginVO vo = new LoginVO();
         // Token 中只携带 id/username/role，敏感字段（密码等）不会进入 JWT。
@@ -99,16 +105,28 @@ public class AuthServiceImpl implements AuthService {
         if (tokenBlacklistService.isBlacklisted(token)) {
             throw new BusinessException(ResultCode.UNAUTHORIZED);
         }
+        // 凭据变更（改密/禁用/删除）后签发的失效时间点必须生效，
+        // 否则旧令牌可以绕过过滤器通过刷新接口换取新令牌。
+        if (tokenBlacklistService.isIssuedBeforeInvalidation(
+                Long.valueOf(claims.getSubject()), claims.getIssuedAt())) {
+            throw new BusinessException(ResultCode.UNAUTHORIZED);
+        }
         // 绝对会话上限：持续刷新不能让令牌永久有效，超时必须重新登录。
         if (jwtTokenProvider.isSessionExpired(claims)) {
+            throw new BusinessException(ResultCode.UNAUTHORIZED);
+        }
+        // 刷新也要回查账号状态：用户被禁用/删除后，旧令牌不应继续换取新令牌。
+        SysUser current = sysUserMapper.selectById(Long.valueOf(claims.getSubject()));
+        if (current == null || current.getStatus() == null || current.getStatus() != 1) {
             throw new BusinessException(ResultCode.UNAUTHORIZED);
         }
         // 旧令牌按剩余有效期加入黑名单，签发新令牌后立即失效。
         tokenBlacklistService.blacklist(token, remainingSeconds(claims));
         String newToken = jwtTokenProvider.generateToken(
-                Long.valueOf(claims.getSubject()),
-                claims.get("username", String.class),
-                claims.get("role", String.class),
+                current.getId(),
+                // 角色/用户名以数据库为准，避免使用旧令牌里的历史声明
+                current.getUsername(),
+                current.getRole(),
                 // 透传会话起始时间，保证绝对上限跨刷新依然生效
                 jwtTokenProvider.sessionStartSeconds(claims));
 
