@@ -16,6 +16,9 @@ public final class RedisKeys {
     /** 已注销的令牌黑名单，value 无意义，依赖 TTL 自动过期。 */
     public static final String TOKEN_BLACKLIST = PREFIX + "auth:token:blacklist:";
 
+    /** 用户令牌失效时间点（秒）：改密/禁用/删除后，早于该时间签发的令牌一律失效。 */
+    public static final String USER_TOKEN_INVALID_BEFORE = PREFIX + "auth:user:token-invalid-before:";
+
     /** 任务运行分布式锁（预留：B7 防止同一任务并发运行）。 */
     public static final String TASK_LOCK = PREFIX + "agent:task:lock:";
 
@@ -35,6 +38,10 @@ public final class RedisKeys {
 
     public static String tokenBlacklist(String token) {
         return TOKEN_BLACKLIST + token;
+    }
+
+    public static String userTokenInvalidBefore(Long userId) {
+        return USER_TOKEN_INVALID_BEFORE + userId;
     }
 
     public static String taskLock(Long taskId) {
