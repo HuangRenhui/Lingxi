@@ -1,7 +1,8 @@
 lingxi:
   jwt:
-    # 仅开发环境使用内置默认密钥；生产环境请在 application.yml 之外通过 JWT_SECRET 覆盖。
-    secret: ${JWT_SECRET:lingxi-dev-secret-key-change-in-production-0123456789}
+    # 开发环境未显式设置 JWT_SECRET 时使用每次启动随机生成的密钥：
+    # 既保留本地开箱即用，又不会把公开的固定密钥带到任何部署环境（重启后旧 token 失效属预期）。
+    secret: ${JWT_SECRET:${random.value}${random.value}${random.value}}
 
 spring:
   datasource:

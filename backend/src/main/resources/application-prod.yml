@@ -4,6 +4,15 @@ spring:
     url: ${SPRING_DATASOURCE_URL}
     username: ${SPRING_DATASOURCE_USERNAME}
     password: ${SPRING_DATASOURCE_PASSWORD}
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX:20}
+      minimum-idle: ${DB_POOL_MIN_IDLE:5}
+      connection-timeout: 10000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  lifecycle:
+    # 发布/重启时等待在途请求完成，避免直接掐断连接
+    timeout-per-shutdown-phase: 20s
   data:
     redis:
       host: ${SPRING_DATA_REDIS_HOST:redis}
@@ -19,6 +28,9 @@ spring:
           max-idle: 8
           min-idle: 0
           max-wait: 2000ms
+
+server:
+  shutdown: graceful
 
 springdoc:
   api-docs:
