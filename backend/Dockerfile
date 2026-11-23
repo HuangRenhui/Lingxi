@@ -13,6 +13,11 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /workspace/target/lingxi-backend.jar app.jar
+RUN groupadd --system app \
+    && useradd --system --gid app app \
+    && mkdir -p /app/logs \
+    && chown -R app:app /app
+USER app
 EXPOSE 8080
 ENV TZ=Asia/Shanghai \
     JAVA_OPTS="-Xms256m -Xmx512m"

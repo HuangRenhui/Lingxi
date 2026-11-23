@@ -6,16 +6,20 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请先在 .env 中设置 MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: lingxi
+      # 应用使用独立账号，避免后端直接持有 root
+      MYSQL_USER: lingxi
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?请先在 .env 中设置 MYSQL_PASSWORD}
       TZ: Asia/Shanghai
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_general_ci
     ports:
-      - "3306:3306"
+      # 只绑定本机，避免数据库直接暴露到公网
+      - "127.0.0.1:3306:3306"
     volumes:
       - mysql-data:/var/lib/mysql
       - ./backend/src/main/resources/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      - ./backend/src/main/resources/db/data.sql:/docker-entrypoint-initdb.d/02-data.sql:ro
+      # 不挂载 data.sql：生产环境不能自动创建演示管理员（admin/Admin@123）
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD}"]
       interval: 10s
@@ -28,7 +32,7 @@ services:
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?请先在 .env 中设置 REDIS_PASSWORD}"]
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -44,15 +48,20 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/lingxi?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      SPRING_DATASOURCE_USERNAME: lingxi
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:?请先在 .env 中设置 JWT_SECRET（至少 32 字符）}
       TZ: Asia/Shanghai
+      LOG_PATH: /app/logs
     ports:
-      - "8080:8080"
+      # 后端只通过 Nginx 对外提供；本机端口便于排障
+      - "127.0.0.1:8080:8080"
+    volumes:
+      # 命名卷继承镜像内 /app/logs 的属主，避免非 root 容器无法写日志
+      - backend-logs:/app/logs
     depends_on:
       mysql:
         condition: service_healthy
@@ -77,3 +86,4 @@ services:
 volumes:
   mysql-data:
   redis-data:
+  backend-logs:
