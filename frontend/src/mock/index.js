@@ -1,6 +1,6 @@
 import axios from 'axios'
 import service from '@/utils/request'
-import { getUser } from '@/utils/auth'
+import { getAdminToken, getToken, getUser } from '@/utils/auth'
 import { loadAssets, loadDemoTasks, loadNotifications } from './account'
 
 /**
@@ -243,7 +243,16 @@ function parseBody(data) {
 const BACKEND_PATH_PATTERNS = [
   /^\/notifications(\/|$)/,
   /^\/artifacts(\/|$)/,
-  /^\/agent\/tasks(\/|$)/
+  /^\/agent\/tasks(\/|$)/,
+  /^\/skills(\/|$)/,
+  /^\/connectors(\/|$)/,
+  /^\/orders(\/|$)/,
+  /^\/devices(\/|$)/,
+  /^\/admin\/subscription-plans(\/|$)/,
+  /^\/admin\/coupons(\/|$)/,
+  /^\/admin\/redeem-codes(\/|$)/,
+  /^\/admin\/billing-rules(\/|$)/,
+  /^\/admin\/moderation-reports(\/|$)/
 ]
 
 /** axios 内置适配器（浏览器下为 xhr），用于放行已接后端的请求 */
@@ -274,30 +283,46 @@ async function bridgeBackendToken() {
   return MOCK_TOKEN
 }
 
+/**
+ * 当前请求是否使用演示令牌。
+ *
+ * <p>演示令牌（以 .mock 结尾）无法通过后端签名校验，直接走本地演示数据；
+ * 真实 JWT 则必须请求后端，否则 401 会被误吞、问题被演示数据掩盖。</p>
+ */
+function usesMockToken(config) {
+  const url = String(config.url || '')
+  const admin = url.startsWith('/admin') || url.includes('/api/admin')
+  const token = admin ? getAdminToken() || getToken() : getToken()
+  return !token || String(token).endsWith('.mock')
+}
+
 // 用自定义 adapter 接管请求：命中 Mock 路由时直接返回本地数据，未命中时返回空数据，
 // 避免未启动后端时页面出现网络错误提示。
 if (MOCK_ENABLED) {
   // adapter 内部任何未预期异常都转换为业务错误，避免整个请求 Promise 直接 reject 造成白屏
   service.defaults.adapter = async config => {
     const path = String(config.url || '').split('?')[0]
-    // 已接后端的路径放行到真实网络；拿不到真实数据时回退演示数据，保证页面不空白
-    if (BACKEND_PATH_PATTERNS.some(pattern => pattern.test(path))) {
+    const method = (config.method || 'get').toUpperCase()
+    const isBackendPath = BACKEND_PATH_PATTERNS.some(pattern => pattern.test(path))
+
+    // 演示令牌或纯演示路由：直接读本地数据，不触碰真实后端
+    if (!isBackendPath || usesMockToken(config)) {
       try {
-        const response = await REAL_ADAPTER(config)
-        const code = response?.data?.code
-        // 演示令牌不是真实 JWT，后端会判 401；这不该让页面报错
-        if (code === 401 || code === 403) {
-          return await handleMockRequest(config)
-        }
-        return response
-      } catch (error) {
         return await handleMockRequest(config)
+      } catch (error) {
+        return fail('演示数据读取失败，请刷新后重试', config)
       }
     }
+
     try {
-      return await handleMockRequest(config)
+      // 真实令牌：401/403 原样返回，由请求层清理会话并跳转登录，不能回退演示数据掩盖鉴权失败
+      return await REAL_ADAPTER(config)
     } catch (error) {
-      return fail('演示数据读取失败，请刷新后重试', config)
+      // 后端不可达时仅读操作回退演示数据；写操作必须如实报错，避免「提示成功但未落库」
+      if (method === 'GET' && !path.startsWith('/admin')) {
+        return await handleMockRequest(config)
+      }
+      throw error
     }
   }
 }
@@ -319,11 +344,14 @@ async function handleMockRequest(config) {
     }
 
     if (method === 'POST' && path === '/auth/login') {
-      const email = normalizeEmail(body.email || body.username)
-      const account = readAccounts().find(item => normalizeEmail(item.email) === email)
-      if (!account) return fail('该邮箱尚未注册，请先注册', config)
+      const loginId = normalizeEmail(body.username || body.email)
+      const account = readAccounts().find(item =>
+        normalizeEmail(item.email) === loginId ||
+        normalizeEmail(item.user?.username) === loginId
+      )
+      if (!account) return fail('该账号尚未注册，请先注册', config)
       if (account.password !== String(body.password || '')) {
-        return fail('邮箱或密码不正确', config)
+        return fail('用户名或密码不正确', config)
       }
       const token = await bridgeBackendToken()
       return ok({ token, user: account.user }, config)
@@ -459,5 +487,10 @@ async function handleMockRequest(config) {
       }
     }
 
-  return ok(null, config)
-}
+    // 未实现的演示接口：读操作返回空数据交给页面处理空态；写操作必须明确失败，
+    // 否则会出现「提示成功但数据没有落库」的假成功。
+    if (method === 'GET') {
+      return ok(null, config)
+    }
+    return fail('当前为演示环境，该操作未接入演示数据', config)
+  }

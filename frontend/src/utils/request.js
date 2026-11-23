@@ -90,6 +90,12 @@ function handleUnauthorized(config) {
   redirectToLogin()
 }
 
+// 登录/刷新/注销自身的鉴权失败属于业务结果（如密码错误），不能当成「会话过期」去跳转
+function isAuthEndpoint(config) {
+  const url = String(config?.url || '')
+  return ['/auth/login', '/auth/admin-login', '/auth/refresh', '/auth/logout'].some(path => url.includes(path))
+}
+
 // 并发 401 时只发起一次刷新，其余请求复用同一个 Promise
 let refreshPromise = null
 
@@ -100,7 +106,9 @@ function refreshToken() {
     const base = service.defaults.baseURL || '/api'
     refreshPromise = axios
       .post(`${base}/auth/refresh`, null, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
+        // 刷新必须设超时，否则后端/Redis 挂起时所有等待请求会无限 pending
+        timeout: 10000
       })
       .then(res => {
         const body = res.data
@@ -119,8 +127,7 @@ function refreshToken() {
 
 // 用户端 401：先尝试刷新并重放原请求，失败再清理并跳转登录
 function handle401(config) {
-  const url = String(config?.url || '')
-  const isAuthCall = url.includes('/auth/login') || url.includes('/auth/refresh') || url.includes('/auth/logout')
+  const isAuthCall = isAuthEndpoint(config)
   if (!config || config._retried || config.skipAuthRefresh || isAdminRequest(config) || isAuthCall) {
     const silent = Boolean(config?.skipAuthRedirect)
     handleUnauthorized(config)
@@ -129,6 +136,11 @@ function handle401(config) {
     return Promise.reject(new Error('登录状态已过期'))
   }
   config._retried = true
+  // 其他标签页可能已经完成刷新并写入新令牌：直接用它重试，避免重复刷新导致多标签互相踢下线
+  const latestToken = getToken()
+  if (latestToken && config._authToken && latestToken !== config._authToken) {
+    return service(config)
+  }
   return refreshToken()
     .then(token => {
       config.headers = config.headers || {}
@@ -147,6 +159,8 @@ service.interceptors.request.use(config => {
   const token = admin ? getAdminToken() || getToken() : getToken()
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
+    // 记录本次请求使用的令牌，401 时可判断是否已被其他标签页刷新
+    config._authToken = token
   }
   return config
 })
@@ -175,8 +189,9 @@ service.interceptors.response.use(
     const status = error.response?.status
     const message = error.response?.data?.message || error.message || '网络异常'
 
-    // HTTP 层 401 与业务码 401 必须同等处理，否则令牌过期后页面会停留在旧状态
-    if (status === 401) {
+    // HTTP 层 401 与业务码 401 必须同等处理，否则令牌过期后页面会停留在旧状态；
+    // 但登录/刷新接口的 401 只是凭证错误，应直接展示后端提示，不能触发跳转
+    if (status === 401 && !isAuthEndpoint(error.config)) {
       return handle401(error.config)
     }
 
@@ -187,7 +202,8 @@ service.interceptors.response.use(
     }
 
     if (status === 403) {
-      ElMessage.error('没有访问权限')
+      // 后端会区分「无权限」与「账号被禁用」等具体原因，优先展示响应体中的提示
+      ElMessage.error(message || '没有访问权限')
       return Promise.reject(error)
     }
 

@@ -144,13 +144,16 @@
     </aside>
 
     <div class="main">
-      <button type="button" class="credit-chip" title="积分余额" @click="router.push('/console/wallet')">
+      <button v-if="isDev" type="button" class="credit-chip" title="积分余额" @click="router.push('/console/wallet')">
         <el-icon><Coin /></el-icon>
         <span class="amount">{{ creditBalance.toFixed(2) }}</span>
         <span class="unit">积分</span>
       </button>
 
       <div class="viewport">
+        <div v-if="showDemoNotice" class="prod-demo-tip">
+          该页面仍为演示数据，写操作不会同步到后端；真实功能需接入对应接口。
+        </div>
         <router-view v-slot="{ Component }">
           <transition name="fade" mode="out-in">
             <!--
@@ -222,8 +225,24 @@ import { optionNames } from '@/utils/model-catalog'
 const route = useRoute()
 const router = useRouter()
 const store = useStore()
+const isDev = import.meta.env.DEV
+// 这些页面仍直接使用本地 Mock 账本/资料，生产环境必须显式提示
+const demoOnlyPrefixes = [
+  '/console/wallet',
+  '/console/subscription',
+  '/console/coupons',
+  '/console/overview',
+  '/console/usage',
+  '/console/earnings',
+  '/console/browser-devices',
+  '/account/profile',
+  '/account/security',
+  '/chat',
+  '/create'
+]
+const showDemoNotice = computed(() => !isDev && demoOnlyPrefixes.some(path => route.path.startsWith(path)))
 const settingsVisible = ref(false)
-const creditBalance = ref(loadWallet().balance)
+const creditBalance = ref(isDev ? loadWallet().balance : 0)
 const activeGroupKey = ref('')
 const accountMenuVisible = ref(false)
 const switchVisible = ref(false)
@@ -332,6 +351,7 @@ function handleKeydown(event) {
 }
 
 function syncCredit() {
+  if (!isDev) return
   creditBalance.value = loadWallet().balance
 }
 
@@ -802,6 +822,17 @@ function handleCommand(command) {
 .viewport {
   flex: 1;
   overflow: auto;
+}
+
+.prod-demo-tip {
+  margin: 12px 24px 0;
+  padding: 10px 14px;
+  border: 1px solid #f0d9a8;
+  border-radius: 10px;
+  background: #fff8e8;
+  color: #8a6116;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .credit-chip {

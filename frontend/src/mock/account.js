@@ -162,9 +162,18 @@ const ASSET_SEED = [
 
 export function loadAssets() {
   const cached = read(KEYS.assets, null)
-  if (Array.isArray(cached)) return cached
-  write(KEYS.assets, ASSET_SEED)
-  return clone(ASSET_SEED)
+  const source = Array.isArray(cached) ? cached : ASSET_SEED
+  if (!Array.isArray(cached)) write(KEYS.assets, ASSET_SEED)
+  // 统一补齐后端 VO 字段，避免演示数据与真实数据两套形状互相踩踏
+  return clone(source).map(item => ({
+    ...item,
+    type: String(item.type || '').toUpperCase(),
+    toolName: item.toolName || item.tool || '',
+    posterUrl: item.posterUrl || item.poster || '',
+    sizeBytes: Number(item.sizeBytes || 0),
+    favorite: item.favorite === true || Number(item.favorite) === 1,
+    trashed: item.trashed === true || Number(item.trashed) === 1
+  }))
 }
 
 export function saveAssets(list) {
