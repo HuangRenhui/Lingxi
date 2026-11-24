@@ -1,6 +1,7 @@
 package com.lingxi.service;
 
 import com.lingxi.dto.AdminUserCreateRequest;
+import com.lingxi.vo.PageResult;
 import com.lingxi.dto.AdminUserUpdateRequest;
 import com.lingxi.vo.AdminUserVO;
 
@@ -14,7 +15,7 @@ public interface AdminUserService {
     /**
      * 分页查询用户，支持用户名/昵称模糊搜索。
      */
-    List<AdminUserVO> list(int page, int size, String keyword);
+    PageResult<AdminUserVO> list(int page, int size, String keyword);
 
     /**
      * 用户详情。

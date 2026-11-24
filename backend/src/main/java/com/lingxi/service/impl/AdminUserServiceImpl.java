@@ -3,6 +3,7 @@ package com.lingxi.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lingxi.common.BusinessException;
+import com.lingxi.vo.PageResult;
 import com.lingxi.common.ResultCode;
 import com.lingxi.dto.AdminUserCreateRequest;
 import com.lingxi.dto.AdminUserUpdateRequest;
@@ -38,7 +39,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     private final JwtTokenProvider jwtTokenProvider;
 
     @Override
-    public List<AdminUserVO> list(int page, int size, String keyword) {
+    public PageResult<AdminUserVO> list(int page, int size, String keyword) {
         requireAdmin();
         long current = Math.max(1, page);
         long pageSize = Math.min(Math.max(1, size), MAX_PAGE_SIZE);
@@ -52,7 +53,8 @@ public class AdminUserServiceImpl implements AdminUserService {
                         .like(SysUser::getNickname, likeKeyword))
                 .orderByDesc(SysUser::getId);
         Page<SysUser> result = sysUserMapper.selectPage(new Page<>(current, pageSize), wrapper);
-        return result.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+        List<AdminUserVO> records = result.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+        return PageResult.of(records, result.getTotal(), current, pageSize);
     }
 
     @Override

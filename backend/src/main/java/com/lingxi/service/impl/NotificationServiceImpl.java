@@ -12,11 +12,15 @@ import com.lingxi.mapper.NotificationMapper;
 import com.lingxi.security.SecurityUtils;
 import com.lingxi.service.NotificationService;
 import com.lingxi.vo.NotificationVO;
+import com.lingxi.vo.PageResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -31,15 +35,25 @@ public class NotificationServiceImpl implements NotificationService {
     private final NotificationMapper notificationMapper;
 
     @Override
-    public List<NotificationVO> listMine(int page, int size, boolean unreadOnly) {
+    public PageResult<NotificationVO> listMine(int page, int size, boolean unreadOnly, boolean readOnly,
+                                               String type, String keyword) {
         long current = Math.max(1, page);
         long pageSize = Math.min(Math.max(1, size), MAX_PAGE_SIZE);
+        String typeFilter = StringUtils.hasText(type) ? type.trim().toUpperCase(Locale.ROOT) : null;
+        String keywordFilter = StringUtils.hasText(keyword) ? keyword.trim() : null;
         LambdaQueryWrapper<Notification> wrapper = new LambdaQueryWrapper<Notification>()
                 .eq(Notification::getUserId, SecurityUtils.getUserId())
                 .eq(unreadOnly, Notification::getReadFlag, 0)
+                .eq(readOnly, Notification::getReadFlag, 1)
+                .eq(typeFilter != null, Notification::getType, typeFilter)
+                .and(keywordFilter != null, w -> w
+                        .like(Notification::getTitle, keywordFilter)
+                        .or()
+                        .like(Notification::getContent, keywordFilter))
                 .orderByDesc(Notification::getId);
         Page<Notification> result = notificationMapper.selectPage(new Page<>(current, pageSize), wrapper);
-        return result.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+        List<NotificationVO> records = result.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+        return PageResult.of(records, result.getTotal(), current, pageSize);
     }
 
     @Override
@@ -120,6 +134,25 @@ public class NotificationServiceImpl implements NotificationService {
     public void delete(Long id) {
         getOwnedNotification(id);
         notificationMapper.deleteById(id);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteBatch(List<Long> ids) {
+        List<Long> uniqueIds = ids == null ? List.of()
+                : ids.stream().filter(Objects::nonNull).distinct().toList();
+        if (uniqueIds.isEmpty()) {
+            throw new BusinessException(ResultCode.PARAM_ERROR);
+        }
+        List<Notification> notifications = notificationMapper.selectBatchIds(uniqueIds);
+        if (notifications.size() != uniqueIds.size()) {
+            throw new BusinessException(ResultCode.NOTIFICATION_NOT_FOUND);
+        }
+        Long userId = SecurityUtils.getUserId();
+        if (notifications.stream().anyMatch(item -> !userId.equals(item.getUserId()))) {
+            throw new BusinessException(ResultCode.NOTIFICATION_NOT_OWNED);
+        }
+        notificationMapper.deleteBatchIds(uniqueIds);
     }
 
     /**

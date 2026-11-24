@@ -1,6 +1,7 @@
 package com.lingxi.controller;
 
 import com.lingxi.common.Result;
+import com.lingxi.vo.PageResult;
 import com.lingxi.dto.AdminUserCreateRequest;
 import com.lingxi.dto.AdminUserUpdateRequest;
 import com.lingxi.service.AdminUserService;
@@ -18,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 import java.util.List;
 
 /**
@@ -39,7 +40,7 @@ public class AdminUserController {
      */
     @GetMapping
     @Operation(summary = "用户列表")
-    public Result<List<AdminUserVO>> list(@RequestParam(defaultValue = "1") int page,
+    public Result<PageResult<AdminUserVO>> list(@RequestParam(defaultValue = "1") int page,
                                           @RequestParam(defaultValue = "20") int size,
                                           @RequestParam(required = false) String keyword) {
         return Result.success(adminUserService.list(page, size, keyword));

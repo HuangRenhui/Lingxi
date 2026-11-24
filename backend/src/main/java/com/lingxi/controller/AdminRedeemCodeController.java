@@ -1,6 +1,7 @@
 package com.lingxi.controller;
 
 import com.lingxi.common.Result;
+import com.lingxi.vo.PageResult;
 import com.lingxi.dto.RedeemCodeBatchRequest;
 import com.lingxi.dto.RedeemCodeCreateRequest;
 import com.lingxi.dto.RedeemCodeUpdateRequest;
@@ -19,7 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 import java.util.List;
 
 /**
@@ -35,7 +36,7 @@ public class AdminRedeemCodeController {
 
     @GetMapping
     @Operation(summary = "兑换码列表")
-    public Result<List<RedeemCodeVO>> list(@RequestParam(defaultValue = "1") int page,
+    public Result<PageResult<RedeemCodeVO>> list(@RequestParam(defaultValue = "1") int page,
                                            @RequestParam(defaultValue = "20") int size,
                                            @RequestParam(required = false) String status,
                                            @RequestParam(required = false) String keyword) {

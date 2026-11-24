@@ -1,8 +1,10 @@
 package com.lingxi.service;
 
+import com.lingxi.dto.ArtifactBatchUpdateRequest;
 import com.lingxi.dto.ArtifactCreateRequest;
 import com.lingxi.dto.ArtifactUpdateRequest;
 import com.lingxi.vo.ArtifactVO;
+import com.lingxi.vo.PageResult;
 
 import java.util.List;
 
@@ -12,9 +14,10 @@ import java.util.List;
 public interface ArtifactService {
 
     /**
-     * 分页查询当前用户的产物，支持按类型、关键词与回收站状态筛选。
+     * 分页查询当前用户的产物，支持类型、关键词、收藏、回收站状态与排序。
      */
-    List<ArtifactVO> listMine(int page, int size, String type, String keyword, Integer trashed);
+    PageResult<ArtifactVO> listMine(int page, int size, String type, String keyword,
+                                    Integer trashed, Integer favorite, String sort);
 
     /**
      * 查询产物详情。
@@ -32,7 +35,17 @@ public interface ArtifactService {
     ArtifactVO update(Long id, ArtifactUpdateRequest request);
 
     /**
+     * 批量更新收藏/回收站标记。
+     */
+    void batchUpdate(ArtifactBatchUpdateRequest request);
+
+    /**
      * 删除产物（逻辑删除）。
      */
     void delete(Long id);
+
+    /**
+     * 批量删除产物（逻辑删除）。
+     */
+    void deleteBatch(List<Long> ids);
 }

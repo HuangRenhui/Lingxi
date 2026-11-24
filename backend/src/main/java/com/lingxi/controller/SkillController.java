@@ -1,6 +1,7 @@
 package com.lingxi.controller;
 
 import com.lingxi.common.Result;
+import com.lingxi.vo.PageResult;
 import com.lingxi.dto.SkillCreateRequest;
 import com.lingxi.dto.SkillUpdateRequest;
 import com.lingxi.service.SkillService;
@@ -18,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 import java.util.List;
 
 /**
@@ -39,7 +40,7 @@ public class SkillController {
      */
     @GetMapping
     @Operation(summary = "我的技能列表")
-    public Result<List<SkillVO>> list(@RequestParam(defaultValue = "1") int page,
+    public Result<PageResult<SkillVO>> list(@RequestParam(defaultValue = "1") int page,
                                       @RequestParam(defaultValue = "20") int size) {
         return Result.success(skillService.listMine(page, size));
     }

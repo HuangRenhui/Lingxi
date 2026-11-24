@@ -95,16 +95,47 @@ public class UserDeviceServiceImpl implements UserDeviceService {
         userDeviceMapper.deleteById(id);
         // 删除的是当前设备时，把最近活跃的剩余设备提升为当前设备
         if (Integer.valueOf(1).equals(device.getCurrentFlag())) {
-            UserDevice next = userDeviceMapper.selectOne(new LambdaQueryWrapper<UserDevice>()
-                    .eq(UserDevice::getUserId, device.getUserId())
-                    .orderByDesc(UserDevice::getLastActiveAt)
-                    .orderByDesc(UserDevice::getId)
-                    .last("LIMIT 1"));
-            if (next != null) {
-                userDeviceMapper.update(null, new LambdaUpdateWrapper<UserDevice>()
-                        .eq(UserDevice::getId, next.getId())
-                        .set(UserDevice::getCurrentFlag, 1));
-            }
+            promoteCurrentDevice(device.getUserId(), List.of(id));
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteBatch(List<Long> ids) {
+        List<Long> uniqueIds = ids == null ? List.of()
+                : ids.stream().filter(java.util.Objects::nonNull).distinct().toList();
+        if (uniqueIds.isEmpty()) {
+            throw new BusinessException(ResultCode.PARAM_ERROR);
+        }
+        Long userId = SecurityUtils.getUserId();
+        List<UserDevice> devices = userDeviceMapper.selectBatchIds(uniqueIds);
+        if (devices.size() != uniqueIds.size()
+                || devices.stream().anyMatch(item -> !userId.equals(item.getUserId()))) {
+            throw new BusinessException(ResultCode.DEVICE_NOT_OWNED);
+        }
+        userDeviceMapper.deleteBatchIds(uniqueIds);
+        // 批量中包含当前设备时，把最近活跃的剩余设备提升为当前设备
+        if (devices.stream().anyMatch(item -> Integer.valueOf(1).equals(item.getCurrentFlag()))) {
+            promoteCurrentDevice(userId, uniqueIds);
+        }
+    }
+
+    /**
+     * 从剩余设备中选最近活跃的一台提升为当前设备。
+     *
+     * @param excludedIds 本次已删除的设备 ID，排除后再挑选
+     */
+    private void promoteCurrentDevice(Long userId, List<Long> excludedIds) {
+        UserDevice next = userDeviceMapper.selectOne(new LambdaQueryWrapper<UserDevice>()
+                .eq(UserDevice::getUserId, userId)
+                .notIn(UserDevice::getId, excludedIds)
+                .orderByDesc(UserDevice::getLastActiveAt)
+                .orderByDesc(UserDevice::getId)
+                .last("LIMIT 1"));
+        if (next != null) {
+            userDeviceMapper.update(null, new LambdaUpdateWrapper<UserDevice>()
+                    .eq(UserDevice::getId, next.getId())
+                    .set(UserDevice::getCurrentFlag, 1));
         }
     }
 

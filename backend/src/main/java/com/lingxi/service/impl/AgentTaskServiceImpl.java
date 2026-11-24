@@ -1,6 +1,7 @@
 package com.lingxi.service.impl;
 
 import com.lingxi.common.BusinessException;
+import com.lingxi.vo.PageResult;
 import com.lingxi.common.ResultCode;
 import com.lingxi.dto.TaskCreateRequest;
 import com.lingxi.dto.TaskUpdateRequest;
@@ -50,7 +51,7 @@ public class AgentTaskServiceImpl implements AgentTaskService {
     }
 
     @Override
-    public List<TaskVO> listMine(int page, int size) {
+    public PageResult<TaskVO> listMine(int page, int size) {
         // page/size 由调用方传入：page 至少 1，size 默认 20 且最多 100，避免一次拉取全量任务。
         int current = Math.max(page, 1);
         int pageSize = size < 1 ? 20 : Math.min(size, 100);
@@ -63,7 +64,8 @@ public class AgentTaskServiceImpl implements AgentTaskService {
                         .orderByDesc(AiTask::getCreatedAt)
                         .orderByDesc(AiTask::getId));
         // 响应结构保持为 List，只返回当前页记录。
-        return result.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+        List<TaskVO> records = result.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+        return PageResult.of(records, result.getTotal(), current, pageSize);
     }
 
     @Override

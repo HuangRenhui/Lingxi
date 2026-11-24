@@ -1,6 +1,7 @@
 package com.lingxi.service;
 
 import com.lingxi.dto.SubscriptionPlanCreateRequest;
+import com.lingxi.vo.PageResult;
 import com.lingxi.dto.SubscriptionPlanUpdateRequest;
 import com.lingxi.vo.SubscriptionPlanVO;
 
@@ -11,7 +12,7 @@ import java.util.List;
  */
 public interface AdminSubscriptionPlanService {
 
-    List<SubscriptionPlanVO> list(int page, int size, String keyword);
+    PageResult<SubscriptionPlanVO> list(int page, int size, String keyword);
 
     SubscriptionPlanVO get(Long id);
 

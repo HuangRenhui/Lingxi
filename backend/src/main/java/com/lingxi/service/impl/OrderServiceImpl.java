@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lingxi.common.BusinessException;
+import com.lingxi.vo.PageResult;
 import com.lingxi.common.OrderNoGenerator;
 import com.lingxi.common.ResultCode;
 import com.lingxi.dto.OrderCreateRequest;
@@ -52,7 +53,7 @@ public class OrderServiceImpl implements OrderService {
     private final BizOrderMapper orderMapper;
 
     @Override
-    public List<OrderVO> listMine(int page, int size, String status, String type, String keyword) {
+    public PageResult<OrderVO> listMine(int page, int size, String status, String type, String keyword) {
         long current = Math.max(1, page);
         long pageSize = Math.min(Math.max(1, size), MAX_PAGE_SIZE);
 
@@ -72,7 +73,8 @@ public class OrderServiceImpl implements OrderService {
                         .like(BizOrder::getOrderNo, likeKeyword))
                 .orderByDesc(BizOrder::getId);
         Page<BizOrder> result = orderMapper.selectPage(new Page<>(current, pageSize), wrapper);
-        return result.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+        List<OrderVO> records = result.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+        return PageResult.of(records, result.getTotal(), current, pageSize);
     }
 
     @Override

@@ -1,6 +1,7 @@
 package com.lingxi.service;
 
 import com.lingxi.dto.TaskCreateRequest;
+import com.lingxi.vo.PageResult;
 import com.lingxi.dto.TaskUpdateRequest;
 import com.lingxi.vo.TaskVO;
 
@@ -14,7 +15,7 @@ public interface AgentTaskService {
     /**
      * 分页查询当前用户的任务列表；page 从 1 开始，size 上限 100。
      */
-    List<TaskVO> listMine(int page, int size);
+    PageResult<TaskVO> listMine(int page, int size);
 
     /**
      * 查询任务详情，仅限本人。

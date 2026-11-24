@@ -1,6 +1,7 @@
 package com.lingxi.controller;
 
 import com.lingxi.common.Result;
+import com.lingxi.vo.PageResult;
 import com.lingxi.dto.ModerationReportCreateRequest;
 import com.lingxi.dto.ModerationReportUpdateRequest;
 import com.lingxi.service.ModerationReportService;
@@ -18,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 import java.util.List;
 
 /**
@@ -34,7 +35,7 @@ public class AdminModerationReportController {
 
     @GetMapping
     @Operation(summary = "举报列表")
-    public Result<List<ModerationReportVO>> list(@RequestParam(defaultValue = "1") int page,
+    public Result<PageResult<ModerationReportVO>> list(@RequestParam(defaultValue = "1") int page,
                                                  @RequestParam(defaultValue = "20") int size,
                                                  @RequestParam(required = false) String status,
                                                  @RequestParam(required = false) String keyword) {

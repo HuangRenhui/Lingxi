@@ -1,6 +1,7 @@
 package com.lingxi.service;
 
 import com.lingxi.dto.ConnectorCreateRequest;
+import com.lingxi.vo.PageResult;
 import com.lingxi.dto.ConnectorUpdateRequest;
 import com.lingxi.vo.ConnectorVO;
 
@@ -14,7 +15,7 @@ public interface ConnectorService {
     /**
      * 分页查询当前用户的连接器。
      */
-    List<ConnectorVO> listMine(int page, int size);
+    PageResult<ConnectorVO> listMine(int page, int size);
 
     /**
      * 查询连接器详情。

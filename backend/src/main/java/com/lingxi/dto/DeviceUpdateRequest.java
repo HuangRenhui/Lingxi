@@ -3,7 +3,7 @@ package com.lingxi.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
-import javax.validation.constraints.Size;
+import jakarta.validation.constraints.Size;
 
 /**
  * 更新设备请求，目前仅支持重命名。

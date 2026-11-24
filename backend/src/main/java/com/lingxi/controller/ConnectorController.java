@@ -1,6 +1,7 @@
 package com.lingxi.controller;
 
 import com.lingxi.common.Result;
+import com.lingxi.vo.PageResult;
 import com.lingxi.dto.ConnectorCreateRequest;
 import com.lingxi.dto.ConnectorUpdateRequest;
 import com.lingxi.service.ConnectorService;
@@ -18,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 import java.util.List;
 
 /**
@@ -39,7 +40,7 @@ public class ConnectorController {
      */
     @GetMapping
     @Operation(summary = "我的连接器列表")
-    public Result<List<ConnectorVO>> list(@RequestParam(defaultValue = "1") int page,
+    public Result<PageResult<ConnectorVO>> list(@RequestParam(defaultValue = "1") int page,
                                           @RequestParam(defaultValue = "20") int size) {
         return Result.success(connectorService.listMine(page, size));
     }

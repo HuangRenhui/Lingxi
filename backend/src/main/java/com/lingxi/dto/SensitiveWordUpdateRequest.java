@@ -2,7 +2,7 @@ package com.lingxi.dto;
 
 import lombok.Data;
 
-import javax.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotNull;
 
 /**
  * 更新敏感词状态请求。

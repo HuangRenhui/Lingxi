@@ -1,6 +1,7 @@
 package com.lingxi.service;
 
 import com.lingxi.dto.OrderCreateRequest;
+import com.lingxi.vo.PageResult;
 import com.lingxi.dto.OrderStatusRequest;
 import com.lingxi.dto.OrderUpdateRequest;
 import com.lingxi.vo.OrderVO;
@@ -15,7 +16,7 @@ public interface OrderService {
     /**
      * 分页查询当前用户的订单，支持状态、类型与关键词筛选。
      */
-    List<OrderVO> listMine(int page, int size, String status, String type, String keyword);
+    PageResult<OrderVO> listMine(int page, int size, String status, String type, String keyword);
 
     /**
      * 查询订单详情。

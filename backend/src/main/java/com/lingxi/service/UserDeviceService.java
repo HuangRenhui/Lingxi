@@ -35,4 +35,9 @@ public interface UserDeviceService {
      * 删除设备记录（等同于下线）。
      */
     void delete(Long id);
+
+    /**
+     * 批量删除设备记录（一次请求下线多台设备）。
+     */
+    void deleteBatch(List<Long> ids);
 }

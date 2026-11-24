@@ -1,6 +1,7 @@
 package com.lingxi.service;
 
 import com.lingxi.dto.ModerationReportCreateRequest;
+import com.lingxi.vo.PageResult;
 import com.lingxi.dto.ModerationReportUpdateRequest;
 import com.lingxi.vo.ModerationReportVO;
 
@@ -11,7 +12,7 @@ import java.util.List;
  */
 public interface ModerationReportService {
 
-    List<ModerationReportVO> list(int page, int size, String status, String keyword);
+    PageResult<ModerationReportVO> list(int page, int size, String status, String keyword);
 
     ModerationReportVO get(Long id);
 

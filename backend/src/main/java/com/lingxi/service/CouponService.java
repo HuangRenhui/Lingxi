@@ -1,6 +1,7 @@
 package com.lingxi.service;
 
 import com.lingxi.dto.CouponCreateRequest;
+import com.lingxi.vo.PageResult;
 import com.lingxi.dto.CouponUpdateRequest;
 import com.lingxi.vo.CouponVO;
 
@@ -11,7 +12,7 @@ import java.util.List;
  */
 public interface CouponService {
 
-    List<CouponVO> list(int page, int size, String keyword, Integer enabled);
+    PageResult<CouponVO> list(int page, int size, String keyword, Integer enabled);
 
     CouponVO get(Long id);
 

@@ -3,6 +3,7 @@ package com.lingxi.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lingxi.common.BusinessException;
+import com.lingxi.vo.PageResult;
 import com.lingxi.common.ResultCode;
 import com.lingxi.dto.BillingRuleCreateRequest;
 import com.lingxi.dto.BillingRuleUpdateRequest;
@@ -31,7 +32,7 @@ public class BillingRuleServiceImpl implements BillingRuleService {
     private final BillingRuleMapper billingRuleMapper;
 
     @Override
-    public List<BillingRuleVO> list(int page, int size, String keyword, String category, Integer enabled) {
+    public PageResult<BillingRuleVO> list(int page, int size, String keyword, String category, Integer enabled) {
         requireAdmin();
         long current = Math.max(1, page);
         long pageSize = Math.min(Math.max(1, size), MAX_PAGE_SIZE);
@@ -47,7 +48,8 @@ public class BillingRuleServiceImpl implements BillingRuleService {
                 .eq(enabled != null, BillingRule::getEnabled, enabled)
                 .orderByDesc(BillingRule::getId);
         Page<BillingRule> result = billingRuleMapper.selectPage(new Page<>(current, pageSize), wrapper);
-        return result.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+        List<BillingRuleVO> records = result.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+        return PageResult.of(records, result.getTotal(), current, pageSize);
     }
 
     @Override

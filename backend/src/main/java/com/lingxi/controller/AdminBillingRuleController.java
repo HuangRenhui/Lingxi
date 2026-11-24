@@ -1,6 +1,7 @@
 package com.lingxi.controller;
 
 import com.lingxi.common.Result;
+import com.lingxi.vo.PageResult;
 import com.lingxi.dto.BillingRuleCreateRequest;
 import com.lingxi.dto.BillingRuleUpdateRequest;
 import com.lingxi.service.BillingRuleService;
@@ -18,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 import java.util.List;
 
 /**
@@ -34,7 +35,7 @@ public class AdminBillingRuleController {
 
     @GetMapping
     @Operation(summary = "计费规则列表")
-    public Result<List<BillingRuleVO>> list(@RequestParam(defaultValue = "1") int page,
+    public Result<PageResult<BillingRuleVO>> list(@RequestParam(defaultValue = "1") int page,
                                             @RequestParam(defaultValue = "20") int size,
                                             @RequestParam(required = false) String keyword,
                                             @RequestParam(required = false) String category,

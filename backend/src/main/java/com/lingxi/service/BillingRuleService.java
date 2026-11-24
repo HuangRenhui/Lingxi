@@ -1,6 +1,7 @@
 package com.lingxi.service;
 
 import com.lingxi.dto.BillingRuleCreateRequest;
+import com.lingxi.vo.PageResult;
 import com.lingxi.dto.BillingRuleUpdateRequest;
 import com.lingxi.vo.BillingRuleVO;
 
@@ -11,7 +12,7 @@ import java.util.List;
  */
 public interface BillingRuleService {
 
-    List<BillingRuleVO> list(int page, int size, String keyword, String category, Integer enabled);
+    PageResult<BillingRuleVO> list(int page, int size, String keyword, String category, Integer enabled);
 
     BillingRuleVO get(Long id);
 

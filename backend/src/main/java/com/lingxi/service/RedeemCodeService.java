@@ -1,6 +1,7 @@
 package com.lingxi.service;
 
 import com.lingxi.dto.RedeemCodeBatchRequest;
+import com.lingxi.vo.PageResult;
 import com.lingxi.dto.RedeemCodeCreateRequest;
 import com.lingxi.dto.RedeemCodeUpdateRequest;
 import com.lingxi.vo.RedeemCodeVO;
@@ -12,7 +13,7 @@ import java.util.List;
  */
 public interface RedeemCodeService {
 
-    List<RedeemCodeVO> list(int page, int size, String status, String keyword);
+    PageResult<RedeemCodeVO> list(int page, int size, String status, String keyword);
 
     RedeemCodeVO get(Long id);
 

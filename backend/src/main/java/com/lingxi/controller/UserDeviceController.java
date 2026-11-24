@@ -3,6 +3,7 @@ package com.lingxi.controller;
 import com.lingxi.common.Result;
 import com.lingxi.dto.DeviceCreateRequest;
 import com.lingxi.dto.DeviceUpdateRequest;
+import com.lingxi.dto.IdsRequest;
 import com.lingxi.service.UserDeviceService;
 import com.lingxi.vo.DeviceVO;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 import java.util.List;
 
 /**
@@ -68,6 +69,16 @@ public class UserDeviceController {
     public Result<DeviceVO> update(@PathVariable Long id,
                                    @Valid @RequestBody DeviceUpdateRequest request) {
         return Result.success(userDeviceService.update(id, request));
+    }
+
+    /**
+     * 批量删除设备：一次请求下线多台设备。
+     */
+    @DeleteMapping("/batch")
+    @Operation(summary = "批量删除设备")
+    public Result<Void> deleteBatch(@Valid @RequestBody IdsRequest request) {
+        userDeviceService.deleteBatch(request.getIds());
+        return Result.success();
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.lingxi.service;
 
 import com.lingxi.dto.SensitiveWordBatchCreateRequest;
+import com.lingxi.vo.PageResult;
 import com.lingxi.dto.SensitiveWordUpdateRequest;
 import com.lingxi.vo.SensitiveWordVO;
 
@@ -11,7 +12,7 @@ import java.util.List;
  */
 public interface SensitiveWordService {
 
-    List<SensitiveWordVO> list(int page, int size, String keyword, String category);
+    PageResult<SensitiveWordVO> list(int page, int size, String keyword, String category);
 
     List<SensitiveWordVO> batchCreate(SensitiveWordBatchCreateRequest request);
 

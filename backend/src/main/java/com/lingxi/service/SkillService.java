@@ -1,6 +1,7 @@
 package com.lingxi.service;
 
 import com.lingxi.dto.SkillCreateRequest;
+import com.lingxi.vo.PageResult;
 import com.lingxi.dto.SkillUpdateRequest;
 import com.lingxi.vo.SkillVO;
 
@@ -14,7 +15,7 @@ public interface SkillService {
     /**
      * 分页查询当前用户的技能。
      */
-    List<SkillVO> listMine(int page, int size);
+    PageResult<SkillVO> listMine(int page, int size);
 
     /**
      * 查询技能详情。

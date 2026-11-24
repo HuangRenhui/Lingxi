@@ -3,6 +3,7 @@ package com.lingxi.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lingxi.common.BusinessException;
+import com.lingxi.vo.PageResult;
 import com.lingxi.common.ResultCode;
 import com.lingxi.dto.SensitiveWordBatchCreateRequest;
 import com.lingxi.dto.SensitiveWordUpdateRequest;
@@ -50,7 +51,7 @@ public class SensitiveWordServiceImpl implements SensitiveWordService {
     private volatile long cachedAt;
 
     @Override
-    public List<SensitiveWordVO> list(int page, int size, String keyword, String category) {
+    public PageResult<SensitiveWordVO> list(int page, int size, String keyword, String category) {
         requireAdmin();
         String likeKeyword = StringUtils.hasText(keyword)
                 ? keyword.trim().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -60,9 +61,11 @@ public class SensitiveWordServiceImpl implements SensitiveWordService {
                 .eq(StringUtils.hasText(category) && !"all".equals(category),
                         ModerationSensitiveWord::getCategory, category)
                 .orderByDesc(ModerationSensitiveWord::getId);
-        Page<ModerationSensitiveWord> result = wordMapper.selectPage(
-                new Page<>(Math.max(page, 1), Math.min(Math.max(size, 1), MAX_PAGE_SIZE)), wrapper);
-        return result.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+        long current = Math.max(page, 1);
+        long pageSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
+        Page<ModerationSensitiveWord> result = wordMapper.selectPage(new Page<>(current, pageSize), wrapper);
+        List<SensitiveWordVO> records = result.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+        return PageResult.of(records, result.getTotal(), current, pageSize);
     }
 
     @Override

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lingxi.common.BusinessException;
+import com.lingxi.vo.PageResult;
 import com.lingxi.common.ResultCode;
 import com.lingxi.dto.SkillCreateRequest;
 import com.lingxi.dto.SkillUpdateRequest;
@@ -35,7 +36,7 @@ public class SkillServiceImpl implements SkillService {
     private final SensitiveWordService sensitiveWordService;
 
     @Override
-    public List<SkillVO> listMine(int page, int size) {
+    public PageResult<SkillVO> listMine(int page, int size) {
         // 页码与页大小做边界收敛，避免异常参数打到数据库
         long current = Math.max(1, page);
         long pageSize = Math.min(Math.max(1, size), MAX_PAGE_SIZE);
@@ -43,7 +44,8 @@ public class SkillServiceImpl implements SkillService {
                 .eq(AiSkill::getUserId, SecurityUtils.getUserId())
                 .orderByDesc(AiSkill::getId);
         Page<AiSkill> result = skillMapper.selectPage(new Page<>(current, pageSize), wrapper);
-        return result.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+        List<SkillVO> records = result.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+        return PageResult.of(records, result.getTotal(), current, pageSize);
     }
 
     @Override

@@ -1,6 +1,7 @@
 package com.lingxi.controller;
 
 import com.lingxi.common.Result;
+import com.lingxi.vo.PageResult;
 import com.lingxi.dto.TaskCreateRequest;
 import com.lingxi.dto.TaskStatusRequest;
 import com.lingxi.dto.TaskUpdateRequest;
@@ -19,7 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 import java.util.List;
 
 /**
@@ -38,7 +39,7 @@ public class AgentTaskController {
 
     @GetMapping
     @Operation(summary = "我的定时任务列表")
-    public Result<List<TaskVO>> list(@RequestParam(defaultValue = "1") int page,
+    public Result<PageResult<TaskVO>> list(@RequestParam(defaultValue = "1") int page,
                                       @RequestParam(defaultValue = "20") int size) {
         return Result.success(agentTaskService.listMine(page, size));
     }

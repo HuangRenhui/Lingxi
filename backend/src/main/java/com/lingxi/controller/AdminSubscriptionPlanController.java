@@ -1,6 +1,7 @@
 package com.lingxi.controller;
 
 import com.lingxi.common.Result;
+import com.lingxi.vo.PageResult;
 import com.lingxi.dto.SubscriptionPlanCreateRequest;
 import com.lingxi.dto.SubscriptionPlanUpdateRequest;
 import com.lingxi.service.AdminSubscriptionPlanService;
@@ -18,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 import java.util.List;
 
 /**
@@ -34,7 +35,7 @@ public class AdminSubscriptionPlanController {
 
     @GetMapping
     @Operation(summary = "套餐列表（含已下架）")
-    public Result<List<SubscriptionPlanVO>> list(@RequestParam(defaultValue = "1") int page,
+    public Result<PageResult<SubscriptionPlanVO>> list(@RequestParam(defaultValue = "1") int page,
                                                  @RequestParam(defaultValue = "20") int size,
                                                  @RequestParam(required = false) String keyword) {
         return Result.success(adminSubscriptionPlanService.list(page, size, keyword));

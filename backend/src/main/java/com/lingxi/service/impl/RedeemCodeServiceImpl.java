@@ -3,6 +3,7 @@ package com.lingxi.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lingxi.common.BusinessException;
+import com.lingxi.vo.PageResult;
 import com.lingxi.common.ResultCode;
 import com.lingxi.dto.RedeemCodeBatchRequest;
 import com.lingxi.dto.RedeemCodeCreateRequest;
@@ -36,7 +37,7 @@ public class RedeemCodeServiceImpl implements RedeemCodeService {
     private final RedeemCodeMapper redeemCodeMapper;
 
     @Override
-    public List<RedeemCodeVO> list(int page, int size, String status, String keyword) {
+    public PageResult<RedeemCodeVO> list(int page, int size, String status, String keyword) {
         requireAdmin();
         long current = Math.max(1, page);
         long pageSize = Math.min(Math.max(1, size), MAX_PAGE_SIZE);
@@ -48,7 +49,8 @@ public class RedeemCodeServiceImpl implements RedeemCodeService {
                 .like(likeKeyword != null, RedeemCode::getCode, likeKeyword)
                 .orderByDesc(RedeemCode::getId);
         Page<RedeemCode> result = redeemCodeMapper.selectPage(new Page<>(current, pageSize), wrapper);
-        return result.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+        List<RedeemCodeVO> records = result.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+        return PageResult.of(records, result.getTotal(), current, pageSize);
     }
 
     @Override

@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lingxi.common.BusinessException;
 import com.lingxi.common.ResultCode;
+import com.lingxi.dto.ArtifactBatchUpdateRequest;
 import com.lingxi.dto.ArtifactCreateRequest;
 import com.lingxi.dto.ArtifactUpdateRequest;
 import com.lingxi.entity.Artifact;
@@ -13,13 +14,16 @@ import com.lingxi.security.SecurityUtils;
 import com.lingxi.service.ArtifactService;
 import com.lingxi.service.SensitiveWordService;
 import com.lingxi.vo.ArtifactVO;
+import com.lingxi.vo.PageResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -36,12 +40,15 @@ public class ArtifactServiceImpl implements ArtifactService {
     private final SensitiveWordService sensitiveWordService;
 
     @Override
-    public List<ArtifactVO> listMine(int page, int size, String type, String keyword, Integer trashed) {
-        // 页码与页大小做边界收敛，避免异常参数打到数据库
+    public PageResult<ArtifactVO> listMine(int page, int size, String type, String keyword,
+                                           Integer trashed, Integer favorite, String sort) {
         long current = Math.max(1, page);
         long pageSize = Math.min(Math.max(1, size), MAX_PAGE_SIZE);
         // 缺省返回全部作品；0 只看正常作品，1 只看回收站
         if (trashed != null && trashed != 0 && trashed != 1) {
+            throw new BusinessException(ResultCode.PARAM_ERROR);
+        }
+        if (favorite != null && favorite != 0 && favorite != 1) {
             throw new BusinessException(ResultCode.PARAM_ERROR);
         }
 
@@ -53,14 +60,32 @@ public class ArtifactServiceImpl implements ArtifactService {
         LambdaQueryWrapper<Artifact> wrapper = new LambdaQueryWrapper<Artifact>()
                 .eq(Artifact::getUserId, SecurityUtils.getUserId())
                 .eq(trashed != null, Artifact::getTrashed, trashed)
+                .eq(favorite != null, Artifact::getFavorite, favorite)
                 .eq(typeFilter != null, Artifact::getType, typeFilter)
                 .and(likeKeyword != null, w -> w
                         .like(Artifact::getTitle, likeKeyword)
                         .or()
-                        .like(Artifact::getPrompt, likeKeyword))
-                .orderByDesc(Artifact::getId);
+                        .like(Artifact::getPrompt, likeKeyword));
+        // 前端传入的 new/old/size 走白名单排序；未指定时按 id 倒序
+        applySort(wrapper, sort);
         Page<Artifact> result = artifactMapper.selectPage(new Page<>(current, pageSize), wrapper);
-        return result.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+        List<ArtifactVO> records = result.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+        return PageResult.of(records, result.getTotal(), current, pageSize);
+    }
+
+    /** 排序白名单：只允许固定字段，避免拼接任意列名。 */
+    private void applySort(LambdaQueryWrapper<Artifact> wrapper, String sort) {
+        if ("new".equals(sort) || "createdAt".equals(sort)) {
+            wrapper.orderByDesc(Artifact::getCreatedAt).orderByDesc(Artifact::getId);
+        } else if ("old".equals(sort)) {
+            wrapper.orderByAsc(Artifact::getCreatedAt).orderByDesc(Artifact::getId);
+        } else if ("size".equals(sort)) {
+            wrapper.orderByDesc(Artifact::getSizeBytes).orderByDesc(Artifact::getId);
+        } else if ("title".equals(sort)) {
+            wrapper.orderByAsc(Artifact::getTitle).orderByDesc(Artifact::getId);
+        } else {
+            wrapper.orderByDesc(Artifact::getId);
+        }
     }
 
     @Override
@@ -174,10 +199,61 @@ public class ArtifactServiceImpl implements ArtifactService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public void batchUpdate(ArtifactBatchUpdateRequest request) {
+        if ((request.getFavorite() == null && request.getTrashed() == null)
+                || isInvalidFlag(request.getFavorite()) || isInvalidFlag(request.getTrashed())) {
+            throw new BusinessException(ResultCode.PARAM_ERROR);
+        }
+        List<Artifact> artifacts = loadOwned(request.getIds());
+        List<Artifact> changed = new ArrayList<>();
+        for (Artifact artifact : artifacts) {
+            if (request.getFavorite() != null) {
+                artifact.setFavorite(request.getFavorite());
+            }
+            if (request.getTrashed() != null) {
+                artifact.setTrashed(request.getTrashed());
+            }
+            changed.add(artifact);
+        }
+        // 逐条更新实体，保证 @TableLogic / 乐观锁等 MyBatis-Plus 行为一致
+        changed.forEach(artifactMapper::updateById);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void delete(Long id) {
         // 先校验归属，避免越权删除
         getOwnedArtifact(id);
         artifactMapper.deleteById(id);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteBatch(List<Long> ids) {
+        List<Artifact> artifacts = loadOwned(ids);
+        artifactMapper.deleteBatchIds(artifacts.stream().map(Artifact::getId).toList());
+    }
+
+    /** 批量校验归属：任一 ID 不存在或不属于当前用户即整体失败。 */
+    private List<Artifact> loadOwned(List<Long> ids) {
+        List<Long> uniqueIds = ids == null ? List.of()
+                : ids.stream().filter(Objects::nonNull).distinct().toList();
+        if (uniqueIds.isEmpty()) {
+            throw new BusinessException(ResultCode.PARAM_ERROR);
+        }
+        List<Artifact> artifacts = artifactMapper.selectBatchIds(uniqueIds);
+        if (artifacts.size() != uniqueIds.size()) {
+            throw new BusinessException(ResultCode.ARTIFACT_NOT_FOUND);
+        }
+        Long userId = SecurityUtils.getUserId();
+        if (artifacts.stream().anyMatch(item -> !userId.equals(item.getUserId()))) {
+            throw new BusinessException(ResultCode.ARTIFACT_NOT_OWNED);
+        }
+        return artifacts;
+    }
+
+    private boolean isInvalidFlag(Integer value) {
+        return value != null && value != 0 && value != 1;
     }
 
     /**

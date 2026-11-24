@@ -3,6 +3,7 @@ package com.lingxi.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lingxi.common.BusinessException;
+import com.lingxi.vo.PageResult;
 import com.lingxi.common.ResultCode;
 import com.lingxi.dto.CouponCreateRequest;
 import com.lingxi.dto.CouponUpdateRequest;
@@ -32,7 +33,7 @@ public class CouponServiceImpl implements CouponService {
     private final MarketingCouponMapper marketingCouponMapper;
 
     @Override
-    public List<CouponVO> list(int page, int size, String keyword, Integer enabled) {
+    public PageResult<CouponVO> list(int page, int size, String keyword, Integer enabled) {
         requireAdmin();
         long current = Math.max(1, page);
         long pageSize = Math.min(Math.max(1, size), MAX_PAGE_SIZE);
@@ -44,7 +45,8 @@ public class CouponServiceImpl implements CouponService {
                 .eq(enabled != null, MarketingCoupon::getEnabled, enabled)
                 .orderByDesc(MarketingCoupon::getId);
         Page<MarketingCoupon> result = marketingCouponMapper.selectPage(new Page<>(current, pageSize), wrapper);
-        return result.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+        List<CouponVO> records = result.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+        return PageResult.of(records, result.getTotal(), current, pageSize);
     }
 
     @Override
