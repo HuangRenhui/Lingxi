@@ -74,22 +74,23 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         // 前后端通过 JWT 无状态认证，不依赖 Cookie/Session，因此关闭 CSRF 与 Session；
         // 注意：若未来引入 Cookie 认证，需重新评估 CSRF 防护。
-        http.csrf().disable()
-                .cors().and()
-                .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS).and()
-                .authorizeRequests()
-                // 浏览器跨域预检请求不携带凭证，必须放行，否则前端请求会在 OPTIONS 阶段被拦截。
-                .antMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .antMatchers(WHITE_LIST).permitAll()
-                // 管理端接口在 URL 层再兜一层：即使新增的 Controller 忘记调用 requireAdmin()，
-                // 非管理员也只能拿到 403，避免因遗漏校验直接越权。
-                .antMatchers("/admin/**").hasRole("ADMIN")
-                .anyRequest().authenticated().and()
+        http
+                .csrf(csrf -> csrf.disable())
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
+                        // 浏览器跨域预检请求不携带凭证，必须放行，否则前端请求会在 OPTIONS 阶段被拦截。
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers(WHITE_LIST).permitAll()
+                        // 管理端接口在 URL 层再兜一层：即使新增的 Controller 忘记调用 requireAdmin()，
+                        // 非管理员也只能拿到 403，避免因遗漏校验直接越权。
+                        .requestMatchers("/admin/**").hasRole("ADMIN")
+                        .anyRequest().authenticated())
                 // 认证失败与权限不足分别交给两个 Handler，保证始终返回统一的 JSON 结构，
                 // 而不是 Spring Security 默认的 HTML 登录页或空响应。
-                .exceptionHandling()
-                .authenticationEntryPoint(authenticationEntryPoint)
-                .accessDeniedHandler(accessDeniedHandler).and()
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler))
                 // JWT 过滤器需早于用户名密码过滤器执行，以便后续的认证判断能直接读取到 SecurityContext。
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();

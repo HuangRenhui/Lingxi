@@ -1,5 +1,5 @@
 # 构建阶段
-FROM maven:3.8.6-jdk-8 AS build
+FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /workspace
 COPY pom.xml .
 RUN mvn -B -q dependency:go-offline
@@ -7,7 +7,7 @@ COPY src ./src
 RUN mvn -B -q clean package -DskipTests
 
 # 运行阶段
-FROM eclipse-temurin:8-jre
+FROM eclipse-temurin:21-jre
 WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \

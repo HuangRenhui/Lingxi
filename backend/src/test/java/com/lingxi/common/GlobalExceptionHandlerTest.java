@@ -2,6 +2,7 @@ package com.lingxi.common;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -15,7 +16,7 @@ class GlobalExceptionHandlerTest {
 
     private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
 
-    private HttpStatus statusOf(ResultCode resultCode) {
+    private HttpStatusCode statusOf(ResultCode resultCode) {
         ResponseEntity<Result<Void>> response =
                 handler.handleBusinessException(new BusinessException(resultCode));
         Result<Void> body = response.getBody();
