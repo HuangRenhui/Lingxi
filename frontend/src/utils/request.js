@@ -58,10 +58,15 @@ function notifyInsufficientBalance(message) {
     })
 }
 
-/** 请求是否属于管理后台：接口路径或当前路由在后台布局下。 */
+/**
+ * 请求是否属于管理后台。
+ *
+ * <p>优先使用调用方显式注入的 admin 标记（管理端 api 模块统一走 adminRequest），
+ * 不再靠 URL 前缀猜测——后端路径调整或接口复用时前缀判断会失效。
+ * 仅对未标记的调用（如管理端登录页发起的认证请求）回退到当前路由判断。</p>
+ */
 function isAdminRequest(config) {
-  const url = String(config?.url || '')
-  if (url.startsWith('/admin') || url.includes('/api/admin')) return true
+  if (typeof config?.admin === 'boolean') return config.admin
   const path = window.location.pathname
   return path === ADMIN_BASE || path.startsWith(`${ADMIN_BASE}/`)
 }

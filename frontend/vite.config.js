@@ -1,9 +1,24 @@
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import AutoImport from 'unplugin-auto-import/vite'
+import Components from 'unplugin-vue-components/vite'
+import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
+import * as ElementPlusIconsVue from '@element-plus/icons-vue'
+
+// 模板里 <Plus /> 这类静态图标不带 ElIcon 前缀，需要单独解析；
+// 这里只在构建期读取全部图标名，实际打包仍只包含被引用的图标。
+const iconNames = new Set(Object.keys(ElementPlusIconsVue))
+const IconResolver = (name) => (iconNames.has(name) ? { name, from: '@element-plus/icons-vue' } : undefined)
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    // Element Plus 的 ElMessage/ElMessageBox 等命令式 API 由源码显式 import，
+    // 这里只处理组件与指令；dts 关闭避免生成无用的类型声明文件。
+    AutoImport({ resolvers: [ElementPlusResolver()], dts: false }),
+    Components({ resolvers: [ElementPlusResolver({ importStyle: 'css' }), IconResolver], dts: false })
+  ],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
@@ -27,14 +42,11 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
-    // element-plus 已独立成 chunk（约 1MB），按需引入前先放宽告警阈值，避免每次构建刷噪音
-    chunkSizeWarningLimit: 1200,
     rollupOptions: {
       output: {
-        // 框架与组件库单独成 chunk，避免主包过大并提升长期缓存命中率
+        // 仅保留框架长期缓存 chunk；Element Plus 由按需插件自动分包
         manualChunks: {
-          vue: ['vue', 'vue-router', 'vuex'],
-          'element-plus': ['element-plus']
+          vue: ['vue', 'vue-router', 'vuex']
         }
       }
     }

@@ -1,7 +1,8 @@
 import axios from 'axios'
 import service from '@/utils/request'
 import { getAdminToken, getToken, getUser } from '@/utils/auth'
-import { loadAssets, loadDemoTasks, loadNotifications } from './account'
+import { ADMIN_BASE } from '@/config/admin'
+import { loadAssets, loadDemoTasks, loadNotifications, saveAssets, saveNotifications } from './account'
 
 /**
  * 前端 Mock 模式
@@ -290,8 +291,11 @@ async function bridgeBackendToken() {
  * 真实 JWT 则必须请求后端，否则 401 会被误吞、问题被演示数据掩盖。</p>
  */
 function usesMockToken(config) {
-  const url = String(config.url || '')
-  const admin = url.startsWith('/admin') || url.includes('/api/admin')
+  // 与 utils/request 的 isAdminRequest 对齐：优先读显式 admin 标记，回退到当前管理端路由。
+  const path = String(window.location.pathname || '')
+  const admin = typeof config?.admin === 'boolean'
+    ? config.admin
+    : path === ADMIN_BASE || path.startsWith(`${ADMIN_BASE}/`)
   const token = admin ? getAdminToken() || getToken() : getToken()
   return !token || String(token).endsWith('.mock')
 }
@@ -327,6 +331,18 @@ if (MOCK_ENABLED) {
   }
 }
 
+/** 把本地演示数据按请求参数切片，模拟后端分页响应 */
+function paginate(list, params = {}) {
+  const page = Math.max(1, Number(params.page) || 1)
+  const size = Math.min(100, Math.max(1, Number(params.size) || 20))
+  return {
+    list: list.slice((page - 1) * size, page * size),
+    total: list.length,
+    page,
+    size
+  }
+}
+
 async function handleMockRequest(config) {
     await delay(180)
     const method = (config.method || 'get').toUpperCase()
@@ -359,10 +375,59 @@ async function handleMockRequest(config) {
 
     // 已接入后端的模块在回退时的演示数据（后端不可达或演示令牌被拒时使用）
     if (method === 'GET' && path === '/notifications') {
-      return ok(loadNotifications(), config)
+      const params = config.params || {}
+      let list = loadNotifications()
+      if (params.unreadOnly === true || params.unreadOnly === 'true') list = list.filter(item => !item.read)
+      if (params.readOnly === true || params.readOnly === 'true') list = list.filter(item => item.read)
+      if (params.type) list = list.filter(item => item.category === params.type)
+      if (params.keyword) {
+        const text = String(params.keyword).toLowerCase()
+        list = list.filter(item => `${item.title || ''}${item.content || ''}`.toLowerCase().includes(text))
+      }
+      return ok(paginate(list, params), config)
+    }
+    if (method === 'GET' && path === '/notifications/unread-count') {
+      return ok({ count: loadNotifications().filter(item => !item.read).length }, config)
+    }
+    if (method === 'DELETE' && path === '/notifications/batch') {
+      const ids = Array.isArray(body.ids) ? body.ids.map(Number) : []
+      const remain = loadNotifications().filter(item => !ids.includes(Number(item.id)))
+      saveNotifications(remain)
+      return ok(null, config)
     }
     if (method === 'GET' && path === '/artifacts') {
-      return ok(loadAssets(), config)
+      const params = config.params || {}
+      let list = loadAssets()
+      const trashed = Number(params.trashed ?? 0)
+      list = list.filter(item => Number(item.trashed) === trashed)
+      if (params.favorite !== undefined && params.favorite !== null && params.favorite !== '') {
+        const favorite = Number(params.favorite) === 1
+        list = list.filter(item => Boolean(item.favorite) === favorite)
+      }
+      if (params.type && params.type !== 'all') list = list.filter(item => item.type === params.type)
+      if (params.keyword) {
+        const text = String(params.keyword).toLowerCase()
+        list = list.filter(item => `${item.title || ''}${item.prompt || ''}`.toLowerCase().includes(text))
+      }
+      if (params.sort === 'old') list = [...list].reverse()
+      return ok(paginate(list, params), config)
+    }
+    if (method === 'PATCH' && path === '/artifacts/batch') {
+      const ids = Array.isArray(body.ids) ? body.ids.map(Number) : []
+      const assets = loadAssets().map(item => {
+        if (!ids.includes(Number(item.id))) return item
+        const next = { ...item }
+        if (body.favorite !== undefined && body.favorite !== null) next.favorite = Number(body.favorite) === 1
+        if (body.trashed !== undefined && body.trashed !== null) next.trashed = Number(body.trashed) === 1
+        return next
+      })
+      saveAssets(assets)
+      return ok(null, config)
+    }
+    if (method === 'DELETE' && path === '/artifacts/batch') {
+      const ids = Array.isArray(body.ids) ? body.ids.map(Number) : []
+      saveAssets(loadAssets().filter(item => !ids.includes(Number(item.id))))
+      return ok(null, config)
     }
     if (method === 'GET' && path === '/agent/tasks') {
       return ok(loadDemoTasks(), config)
