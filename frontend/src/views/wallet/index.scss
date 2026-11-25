@@ -1,0 +1,415 @@
+.wallet-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.panel-block {
+  padding: 18px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panel-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.panel-head span {
+  color: var(--app-muted);
+  font-size: 11.5px;
+}
+
+.recharge-panel {
+  gap: 16px;
+}
+
+.bonus-badge {
+  flex-shrink: 0;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  background: rgba(251, 191, 36, 0.1);
+  color: #fbbf24;
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.recharge-balance {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 16px 18px;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.16), rgba(15, 23, 42, 0.18));
+}
+
+.balance-label {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.recharge-balance strong {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.balance-unit {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.recharge-tips {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: var(--app-muted);
+  font-size: 11.5px;
+  line-height: 1.7;
+}
+
+.recharge-cta {
+  width: 100%;
+  height: 40px;
+  margin-top: auto;
+}
+
+.redeem-form {
+  display: flex;
+  gap: 10px;
+}
+
+.redeem-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px dashed var(--app-border-strong);
+  color: var(--app-muted);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.panel-divider {
+  height: 1px;
+  background: var(--app-border);
+}
+
+.rule-list {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: var(--app-muted);
+  font-size: 11.5px;
+  line-height: 1.65;
+}
+
+.table-panel {
+  padding: 16px 20px 10px;
+}
+
+.table-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.table-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.table-head span {
+  color: var(--app-muted);
+  font-size: 11.5px;
+}
+
+.table-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.type-select {
+  width: 130px;
+}
+
+.income {
+  color: #34d399;
+}
+
+.expense {
+  color: #f87171;
+}
+
+.table-empty {
+  padding: 32px 0;
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.pager {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 0 2px;
+}
+
+@media (max-width: 1080px) {
+  .wallet-grid {
+    grid-template-columns: 1fr;
+  }
+}
+/* ---------- 积分总览 ---------- */
+.credit-overview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 24px;
+  border: 1px solid var(--app-border);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.18), rgba(15, 23, 42, 0.24));
+}
+
+.overview-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--app-muted);
+  font-size: 12.5px;
+}
+
+.overview-info {
+  font-size: 13px;
+  cursor: help;
+}
+
+.overview-value {
+  margin-top: 6px;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.overview-split {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.overview-split strong {
+  color: inherit;
+  font-weight: 600;
+}
+
+.split-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.45;
+}
+
+.overview-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.overview-redeem {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+/* ---------- 奖励积分 ---------- */
+.reward-panel {
+  padding: 18px 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.reward-tabs {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.reward-tabs button {
+  padding: 5px 14px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--app-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.reward-tabs button.active {
+  background: rgba(37, 99, 235, 0.9);
+  color: #fff;
+}
+
+.reward-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reward-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.28);
+}
+
+.reward-card.is-expired {
+  opacity: 0.55;
+}
+
+.reward-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+}
+
+.reward-tag {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  line-height: 1.6;
+}
+
+.reward-tag.warn {
+  border: 1px solid rgba(251, 191, 36, 0.32);
+  background: rgba(251, 191, 36, 0.12);
+  color: #fbbf24;
+}
+
+.reward-tag.muted {
+  border: 1px solid var(--app-border);
+  color: var(--app-muted);
+}
+
+.reward-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 5px;
+  color: var(--app-muted);
+  font-size: 11.5px;
+}
+
+.reward-amount {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.reward-amount strong {
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.reward-total {
+  color: var(--app-muted);
+  font-size: 11.5px;
+}
+
+.reward-empty {
+  padding: 22px 0;
+  text-align: center;
+  color: var(--app-muted);
+  font-size: 12.5px;
+  border: 1px dashed var(--app-border);
+  border-radius: 12px;
+}
+
+.reward-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: space-between;
+  color: var(--app-muted);
+  font-size: 11.5px;
+}
+
+.reward-foot-warn {
+  color: #fbbf24;
+}
+
+/* ---------- 奖励明细抽屉 ---------- */
+.detail-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.28);
+}
+
+.detail-amount strong {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.detail-amount span {
+  margin-left: 6px;
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.detail-expire {
+  color: var(--app-muted);
+  font-size: 11.5px;
+}
+
+.detail-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  color: var(--app-muted);
+  font-size: 11.5px;
+}
