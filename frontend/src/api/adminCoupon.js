@@ -1,4 +1,4 @@
-import request from '@/utils/request'
+import request from '@/utils/adminRequest'
 
 /** 管理端优惠券列表 */
 export function listAdminCoupons({ page = 1, size = 100, keyword, enabled } = {}) {

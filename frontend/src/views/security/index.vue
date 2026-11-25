@@ -167,7 +167,7 @@ import { useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import dayjs from 'dayjs'
-import { deleteDevice, listDevices } from '@/api/device'
+import { deleteDevice, deleteDevices, listDevices } from '@/api/device'
 import PageHeader from '@/components/PageHeader.vue'
 import TablePager from '@/components/TablePager.vue'
 import {
@@ -379,7 +379,7 @@ async function offlineOthers() {
     return
   }
   try {
-    await Promise.all(others.map(item => deleteDevice(item.id)))
+    await deleteDevices(others.map(item => item.id))
     devices.value = devices.value.filter(item => item.current)
     ElMessage.success('其他设备已全部下线')
   } catch (error) {

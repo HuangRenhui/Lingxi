@@ -22,9 +22,9 @@
           </el-input>
         </div>
 
-        <ul v-if="filtered.length" class="notice-list">
+        <ul v-if="notifications.length" class="notice-list">
           <li
-            v-for="item in filtered"
+            v-for="item in notifications"
             :key="item.id"
             class="notice-item"
             :class="{ unread: !item.read }"
@@ -49,6 +49,7 @@
         </ul>
 
         <EmptyState v-else :text="emptyText" />
+        <TablePager v-model:page="page" :page-size="pageSize" :total="total" />
       </div>
 
       <aside class="panel setting-panel">
@@ -74,7 +75,7 @@
           </div>
           <div class="summary-row">
             <span>全部</span>
-            <strong>{{ notifications.length }}</strong>
+            <strong>{{ total }}</strong>
           </div>
         </div>
       </aside>
@@ -83,15 +84,17 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { writeJson } from '@/utils/storage'
-import { fetchAllPages } from '@/utils/pagination'
 import PageHeader from '@/components/PageHeader.vue'
 import TabStrip from '@/components/TabStrip.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import TablePager from '@/components/TablePager.vue'
 import {
   deleteNotification,
+  deleteNotifications,
+  getUnreadCount,
   listNotifications,
   markAllNotificationsRead,
   markNotificationRead
@@ -104,6 +107,11 @@ const notifications = ref([])
 const loading = ref(false)
 const tab = ref('all')
 const keyword = ref('')
+const page = ref(1)
+const pageSize = 20
+const total = ref(0)
+const unreadCount = ref(0)
+let filterTimer = null
 
 /** 后端字段是 type/readFlag，页面沿用 category/read 的既有模板 */
 function normalizeNotification(item) {
@@ -114,7 +122,8 @@ function normalizeNotification(item) {
     title: item.title || '',
     content: item.content || '',
     category: String(rawCategory).toLowerCase(),
-    read: item.read === true || Number(item.readFlag) === 1,
+    // 后端返回 readFlag(0/1)，Mock 返回 read(boolean)
+    read: item.readFlag === undefined ? Boolean(item.read) : Number(item.readFlag) === 1,
     createdAt: item.createdAt || ''
   }
 }
@@ -122,16 +131,51 @@ function normalizeNotification(item) {
 async function reload() {
   loading.value = true
   try {
-    const result = await fetchAllPages(params => listNotifications(params))
-    notifications.value = (result ? result.list : []).map(normalizeNotification)
+    const result = await listNotifications({
+      page: page.value,
+      size: pageSize,
+      unreadOnly: tab.value === 'unread',
+      type: ['all', 'unread'].includes(tab.value) ? undefined : tab.value,
+      keyword: keyword.value.trim() || undefined
+    })
+    notifications.value = (result?.list || []).map(normalizeNotification)
+    total.value = Number(result?.total || 0)
   } catch (error) {
     notifications.value = []
+    total.value = 0
   } finally {
     loading.value = false
   }
 }
 
-onMounted(reload)
+async function reloadUnreadCount() {
+  try {
+    const result = await getUnreadCount()
+    unreadCount.value = Number(result?.count ?? result ?? 0)
+  } catch (error) {
+    // 角标失败不影响列表
+  }
+}
+
+function refresh() {
+  reload()
+  reloadUnreadCount()
+}
+
+onMounted(refresh)
+
+watch([tab], () => {
+  page.value = 1
+  reload()
+})
+watch(keyword, () => {
+  window.clearTimeout(filterTimer)
+  filterTimer = window.setTimeout(() => {
+    page.value = 1
+    reload()
+  }, 300)
+})
+watch(page, reload)
 
 const tabs = [
   { key: 'all', label: '全部' },
@@ -150,22 +194,10 @@ const prefItems = [
 
 const prefs = reactive(loadPrefs())
 
-const unreadCount = computed(() => notifications.value.filter(item => !item.read).length)
-
 const emptyText = computed(() => {
   if (tab.value === 'unread') return '没有未读通知'
   if (keyword.value.trim()) return '没有匹配的通知'
   return '还没有通知'
-})
-
-const filtered = computed(() => {
-  const text = keyword.value.trim().toLowerCase()
-  return notifications.value.filter(item => {
-    if (tab.value === 'unread' && item.read) return false
-    if (!['all', 'unread'].includes(tab.value) && item.category !== tab.value) return false
-    if (text && !`${item.title}${item.content}`.toLowerCase().includes(text)) return false
-    return true
-  })
 })
 
 function loadPrefs() {
@@ -197,7 +229,7 @@ async function markRead(item) {
   if (item.read) return
   try {
     await markNotificationRead(item.id)
-    item.read = true
+    refresh()
   } catch (error) {
     // 拦截器已提示，保持原状态即可
   }
@@ -206,10 +238,8 @@ async function markRead(item) {
 async function readAll() {
   try {
     await markAllNotificationsRead()
-    notifications.value.forEach(item => {
-      item.read = true
-    })
     ElMessage.success('已全部标为已读')
+    refresh()
   } catch (error) {
     // 拦截器已提示
   }
@@ -218,26 +248,34 @@ async function readAll() {
 async function remove(item) {
   try {
     await deleteNotification(item.id)
-    notifications.value = notifications.value.filter(entry => entry.id !== item.id)
     ElMessage.success('通知已删除')
+    refresh()
   } catch (error) {
     // 拦截器已提示
   }
 }
 
 async function clearRead() {
-  const readItems = notifications.value.filter(item => item.read)
-  if (!readItems.length) {
-    ElMessage.info('没有已读通知需要清除')
-    return
-  }
-  // 后端只提供单条删除，批量清除逐条调用；并发数受通知条数限制，量级很小
   try {
-    await Promise.all(readItems.map(item => deleteNotification(item.id)))
-    notifications.value = notifications.value.filter(item => !item.read)
-    ElMessage.success(`已清除 ${readItems.length} 条已读通知`)
+    // 先按页取全部已读通知的 ID（每页最多 100 条），再一次性批量删除
+    const ids = []
+    let current = 1
+    let pages = 1
+    do {
+      const result = await listNotifications({ page: current, size: 100, readOnly: true })
+      ids.push(...(result?.list || []).map(item => item.id))
+      pages = Math.max(1, Math.ceil(Number(result?.total || 0) / 100))
+      current += 1
+    } while (current <= pages)
+    if (!ids.length) {
+      ElMessage.info('没有已读通知需要清除')
+      return
+    }
+    await deleteNotifications(ids)
+    ElMessage.success(`已清除 ${ids.length} 条已读通知`)
+    refresh()
   } catch (error) {
-    await reload()
+    // 请求层已提示
   }
 }
 </script>

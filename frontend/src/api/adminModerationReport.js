@@ -1,4 +1,4 @@
-import request from '@/utils/request'
+import request from '@/utils/adminRequest'
 
 /** 管理端举报列表 */
 export function listAdminModerationReports({ page = 1, size = 100, status, keyword } = {}) {

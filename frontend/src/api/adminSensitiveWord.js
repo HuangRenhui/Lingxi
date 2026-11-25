@@ -1,4 +1,4 @@
-import request from '@/utils/request'
+import request from '@/utils/adminRequest'
 
 /** 敏感词列表 */
 export function listAdminSensitiveWords(params) {

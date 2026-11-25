@@ -170,7 +170,9 @@ function fromApi(plan) {
 
 async function loadAll(silent = false) {
   try {
-    const list = await listAdminPlans({ page: 1, size: 100 })
+    const result = await listAdminPlans({ page: 1, size: 100 })
+    // 后端已返回 PageResult；同时兼容未接后端时 Mock 返回的数组
+    const list = Array.isArray(result) ? result : result?.list
     if (Array.isArray(list)) {
       plans.value = list.map(fromApi)
       demoMode.value = false

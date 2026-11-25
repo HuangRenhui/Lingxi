@@ -1,4 +1,4 @@
-import request from '@/utils/request'
+import request from '@/utils/adminRequest'
 
 /** 管理端套餐列表（含已下架） */
 export function listAdminPlans({ page = 1, size = 100, keyword } = {}) {

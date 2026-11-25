@@ -15,9 +15,9 @@
     </PageHeader>
 
     <section class="stat-grid">
-      <StatCard label="作品总数" :value="activeAssets.length" icon="Picture" hint="不含回收站" />
-      <StatCard label="已收藏" :value="favoriteCount" icon="Star" hint="点击卡片星标可取消" />
-      <StatCard label="回收站" :value="trashedAssets.length" icon="Delete" hint="保留 30 天后自动清理" />
+      <StatCard label="作品总数" :value="stats.all" icon="Picture" hint="不含回收站" />
+      <StatCard label="已收藏" :value="stats.favorite" icon="Star" hint="点击卡片星标可取消" />
+      <StatCard label="回收站" :value="stats.trash" icon="Delete" hint="保留 30 天后自动清理" />
     </section>
 
     <section class="panel asset-panel">
@@ -42,12 +42,12 @@
           <el-option label="最早创建" value="old" />
           <el-option label="占用空间" value="size" />
         </el-select>
-        <span class="asset-count">{{ filtered.length }} 个作品</span>
+        <span class="asset-count">{{ total }} 个作品</span>
       </div>
 
-      <div v-if="filtered.length" class="asset-grid">
+      <div v-if="assets.length" class="asset-grid">
         <article
-          v-for="item in filtered"
+          v-for="item in assets"
           :key="item.id"
           class="asset-card"
           :class="{ selected: isSelected(item.id) }"
@@ -98,6 +98,8 @@
         <el-button v-if="tab === 'trash'" round @click="tab = 'all'">返回作品列表</el-button>
         <el-button v-else round type="primary" @click="goCreate">去创作第一件作品</el-button>
       </EmptyState>
+
+      <TablePager v-model:page="page" :page-size="pageSize" :total="total" />
     </section>
 
     <transition name="bulk">
@@ -136,19 +138,24 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
 import StatCard from '@/components/StatCard.vue'
 import TabStrip from '@/components/TabStrip.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import { deleteArtifact, listArtifacts, updateArtifact } from '@/api/artifact'
+import TablePager from '@/components/TablePager.vue'
+import { batchUpdateArtifacts, deleteArtifact, listArtifacts, updateArtifact } from '@/api/artifact'
 import { classOf } from '@/utils/text'
-import { fetchAllPages } from '@/utils/pagination'
 
 const router = useRouter()
 const assets = ref([])
+const page = ref(1)
+const pageSize = 12
+const total = ref(0)
+const stats = ref({ all: 0, favorite: 0, trash: 0 })
+let filterTimer = null
 const tab = ref('all')
 const keyword = ref('')
 const type = ref('all')
@@ -192,17 +199,52 @@ function normalizeArtifact(item) {
   }
 }
 
+/** 当前页数据：所有筛选/排序下推给后端，不再一次拉全量 */
 async function loadAssetsFromApi() {
   try {
-    // 不传 trashed，取全部由页面按标签过滤；超过后端单页上限时逐页取全
-    const result = await fetchAllPages(params => listArtifacts(params))
-    assets.value = (result ? result.list : []).map(normalizeArtifact)
+    const params = {
+      page: page.value,
+      size: pageSize,
+      keyword: keyword.value.trim() || undefined,
+      type: type.value === 'all' ? undefined : type.value,
+      sort: sort.value,
+      trashed: tab.value === 'trash' ? 1 : 0,
+      favorite: tab.value === 'favorite' ? 1 : undefined
+    }
+    const result = await listArtifacts(params)
+    assets.value = (result?.list || []).map(normalizeArtifact)
+    total.value = Number(result?.total || 0)
   } catch (error) {
     assets.value = []
+    total.value = 0
   }
 }
 
-onMounted(loadAssetsFromApi)
+/** 标签数量用 size=1 的分页请求取 total，避免拉取每条记录 */
+async function loadStats() {
+  try {
+    const base = { page: 1, size: 1 }
+    const [all, favorite, trash] = await Promise.all([
+      listArtifacts({ ...base, trashed: 0 }),
+      listArtifacts({ ...base, trashed: 0, favorite: 1 }),
+      listArtifacts({ ...base, trashed: 1 })
+    ])
+    stats.value = {
+      all: Number(all?.total || 0),
+      favorite: Number(favorite?.total || 0),
+      trash: Number(trash?.total || 0)
+    }
+  } catch (error) {
+    // 统计失败不影响列表展示
+  }
+}
+
+function refresh() {
+  loadAssetsFromApi()
+  loadStats()
+}
+
+onMounted(refresh)
 
 const tabs = [
   { key: 'all', label: '全部作品' },
@@ -210,46 +252,27 @@ const tabs = [
   { key: 'trash', label: '回收站' }
 ]
 
-const activeAssets = computed(() => assets.value.filter(item => !item.trashed))
-const trashedAssets = computed(() => assets.value.filter(item => item.trashed))
-const favoriteCount = computed(() => assets.value.filter(item => item.favorite && !item.trashed).length)
-
 const emptyText = computed(() => {
   if (tab.value === 'trash') return '回收站是空的'
   if (tab.value === 'favorite') return '还没有收藏的作品'
   return '还没有作品，去创作页生成第一件吧'
 })
 
-const filtered = computed(() => {
-  const text = keyword.value.trim().toLowerCase()
-  let list = assets.value.filter(item => {
-    if (tab.value === 'trash') return item.trashed
-    if (tab.value === 'favorite') return item.favorite && !item.trashed
-    return !item.trashed
-  })
-  if (text) {
-    list = list.filter(
-      item =>
-        String(item.title || '').toLowerCase().includes(text) ||
-        String(item.prompt || '').toLowerCase().includes(text)
-    )
-  }
-  if (type.value !== 'all') {
-    list = list.filter(item => item.type === type.value)
-  }
-  const sorted = [...list]
-  if (sort.value === 'new') sorted.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
-  if (sort.value === 'old') sorted.sort((a, b) => (a.createdAt > b.createdAt ? 1 : -1))
-  if (sort.value === 'size') {
-    // size 可能是 '—' 或带单位字符串，parseFloat 得到 NaN 会让排序结果不稳定
-    const sizeOf = value => {
-      const num = Number.parseFloat(String(value || '').replace(/[^\d.]/g, ''))
-      return Number.isFinite(num) ? num : 0
-    }
-    sorted.sort((a, b) => sizeOf(b.size) - sizeOf(a.size))
-  }
-  return sorted
+// 筛选变化后回到第一页；关键词做简单防抖，避免每次输入都发请求
+watch([tab, type, sort], () => {
+  page.value = 1
+  loadAssetsFromApi()
 })
+watch(keyword, () => {
+  window.clearTimeout(filterTimer)
+  filterTimer = window.setTimeout(() => {
+    page.value = 1
+    loadAssetsFromApi()
+  }, 300)
+})
+watch(page, loadAssetsFromApi)
+
+onBeforeUnmount(() => window.clearTimeout(filterTimer))
 
 function typeLabel(value) {
   return { IMAGE: '图片', VIDEO: '视频', AUDIO: '音频' }[value] || value
@@ -274,7 +297,7 @@ function toggleSelect(id) {
 }
 
 function selectAll() {
-  const ids = filtered.value.map(item => item.id)
+  const ids = assets.value.map(item => item.id)
   selected.value = ids.every(id => isSelected(id))
     ? selected.value.filter(id => !ids.includes(id))
     : Array.from(new Set([...selected.value, ...ids]))
@@ -284,8 +307,8 @@ async function toggleFavorite(item) {
   const next = !item.favorite
   try {
     await updateArtifact(item.id, { favorite: next ? 1 : 0 })
-    item.favorite = next
     ElMessage.success(next ? '已加入收藏' : '已取消收藏')
+    refresh()
   } catch (error) {
     // 请求层已提示
   }
@@ -294,9 +317,9 @@ async function toggleFavorite(item) {
 async function moveToTrash(item) {
   try {
     await updateArtifact(item.id, { trashed: 1 })
-    item.trashed = true
     selected.value = selected.value.filter(id => id !== item.id)
     ElMessage.success('已移入回收站')
+    refresh()
   } catch (error) {
     // 请求层已提示
   }
@@ -305,8 +328,8 @@ async function moveToTrash(item) {
 async function restore(item) {
   try {
     await updateArtifact(item.id, { trashed: 0 })
-    item.trashed = false
     ElMessage.success('已还原到作品列表')
+    refresh()
   } catch (error) {
     // 请求层已提示
   }
@@ -324,9 +347,9 @@ async function destroy(item) {
   }
   try {
     await deleteArtifact(item.id)
-    assets.value = assets.value.filter(entry => entry.id !== item.id)
     selected.value = selected.value.filter(id => id !== item.id)
     ElMessage.success('已彻底删除')
+    refresh()
   } catch (error) {
     // 请求层已提示
   }
@@ -371,13 +394,12 @@ async function favoriteSelected() {
     return
   }
   try {
-    await Promise.all(targets.map(item => updateArtifact(item.id, { favorite: 1 })))
-    targets.forEach(item => {
-      item.favorite = true
-    })
+    await batchUpdateArtifacts({ ids: targets.map(item => item.id), favorite: 1 })
     ElMessage.success(`已收藏 ${targets.length} 个作品`)
+    selected.value = []
+    refresh()
   } catch (error) {
-    await loadAssetsFromApi()
+    // 请求层已提示
   }
 }
 
@@ -433,14 +455,12 @@ async function trashSelected() {
     return
   }
   try {
-    await Promise.all(targets.map(item => updateArtifact(item.id, { trashed: 1 })))
-    targets.forEach(item => {
-      item.trashed = true
-    })
+    await batchUpdateArtifacts({ ids: targets.map(item => item.id), trashed: 1 })
     ElMessage.success('已移入回收站')
     selected.value = []
+    refresh()
   } catch (error) {
-    await loadAssetsFromApi()
+    // 请求层已提示
   }
 }
 
@@ -451,14 +471,12 @@ async function restoreSelected() {
     return
   }
   try {
-    await Promise.all(targets.map(item => updateArtifact(item.id, { trashed: 0 })))
-    targets.forEach(item => {
-      item.trashed = false
-    })
+    await batchUpdateArtifacts({ ids: targets.map(item => item.id), trashed: 0 })
     ElMessage.success('已批量还原')
     selected.value = []
+    refresh()
   } catch (error) {
-    await loadAssetsFromApi()
+    // 请求层已提示
   }
 }
 

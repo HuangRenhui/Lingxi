@@ -14,6 +14,11 @@ export function updateDevice(id, data) {
   return request.put(`/devices/${id}`, data)
 }
 
+/** 一次请求批量下线多台设备 */
+export function deleteDevices(ids) {
+  return request.delete('/devices/batch', { data: { ids } })
+}
+
 export function deleteDevice(id) {
   return request.delete(`/devices/${id}`)
 }

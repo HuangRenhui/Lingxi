@@ -1,4 +1,4 @@
-import request from '@/utils/request'
+import request from '@/utils/adminRequest'
 
 export function listAdminUsers({ page = 1, size = 100, keyword } = {}) {
   return request.get('/admin/users', { params: { page, size, keyword } })

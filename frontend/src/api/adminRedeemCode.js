@@ -1,4 +1,4 @@
-import request from '@/utils/request'
+import request from '@/utils/adminRequest'
 
 /** 管理端兑换码列表 */
 export function listAdminRedeemCodes({ page = 1, size = 100, status, keyword } = {}) {

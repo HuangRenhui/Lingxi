@@ -1,4 +1,4 @@
-import request from '@/utils/request'
+import request from '@/utils/adminRequest'
 
 /** 管理端计费规则列表 */
 export function listAdminBillingRules({ page = 1, size = 100, keyword, category, enabled } = {}) {
